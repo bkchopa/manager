@@ -1,0 +1,112 @@
+/* ✅ 테이블 스타일 */
+.ticket-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+}
+
+.ticket-table th, .ticket-table td {
+  padding: 10px;
+  border: 1px solid #ddd;
+  text-align: center;
+}
+
+.ticket-table th {
+  background-color: #f4f4f4;
+  font-weight: bold;
+}
+
+/* ✅ 좌석 이미지 기본 크기 */
+.seat-image {
+  width: 80px;
+  height: auto;
+  cursor: pointer;
+  transition: transform 0.3s ease-in-out;
+}
+
+/* ✅ 확대 이미지 모달 */
+.image-modal {
+  display: none;
+  position: fixed;
+  z-index: 2000;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.8);
+  padding: 10px;
+  border-radius: 8px;
+}
+
+.image-modal img {
+  max-width: 90%;
+  max-height: 90%;
+  border-radius: 8px;
+}
+
+/* ✅ 닫기 버튼 */
+.image-modal .close {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  font-size: 25px;
+  color: white;
+  cursor: pointer;
+}
+
+/* ✅ 버튼 스타일 */
+.button-container {
+  margin-top: 20px;
+  text-align: center;
+}
+
+/* ★ Modal 기본 스타일 */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 2000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: rgba(0,0,0,0.5);
+}
+
+/* ★ Modal 내용 영역 스타일 (크기 확대) */
+.modal-content {
+  background-color: #fefefe;
+  margin: 3% auto;
+  padding: 30px;
+  border: 1px solid #888;
+  width: 90%;
+  max-width: 800px;
+  border-radius: 8px;
+}
+
+/* ★ 모달 내 닫기 버튼 스타일 */
+.modal-content .close {
+  color: #aaa;
+  float: right;
+  font-size: 28px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.modal-content .close:hover,
+.modal-content .close:focus {
+  color: black;
+  text-decoration: none;
+}
+
+/* ★ 티켓 추가 폼 입력 필드 스타일 */
+#addTicketForm input[type="text"],
+#addTicketForm input[type="datetime-local"],
+#addTicketForm input[type="number"],
+#addTicketForm input[type="file"],
+#addTicketForm input[type="month"] {
+  width: 100%;
+  padding: 10px;
+  margin: 5px 0 15px 0;
+  box-sizing: border-box;
+  font-size: 16px;
+}

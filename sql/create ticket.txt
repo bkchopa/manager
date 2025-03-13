@@ -1,0 +1,28 @@
+/****** Object:  Table [dbo].[ticket]    Script Date: 2025-03-11 오후 5:25:35 ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[ticket](
+	[reservation_number] [nvarchar](50) NOT NULL,
+	[purchase_source] [nvarchar](50) NOT NULL,
+	[buyer] [nvarchar](50) NOT NULL,
+	[purchase_date] [datetime] NOT NULL,
+	[payment_amount] [int] NULL,
+	[payment_method] [nvarchar](50) NULL,
+	[card_company] [nvarchar](50) NULL,
+	[card_number] [nvarchar](50) NULL,
+	[card_approval_number] [nvarchar](50) NULL,
+	[product_use_date] [datetime] NOT NULL,
+	[product_name] [nvarchar](50) NOT NULL,
+	[purchase_quantity] [int] NOT NULL,
+	[seat_detail] [nvarchar](max) NOT NULL,
+	[seat_image_name] [nvarchar](max) NOT NULL,
+ CONSTRAINT [PK_ticket] PRIMARY KEY CLUSTERED 
+(
+	[reservation_number] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
