@@ -38,9 +38,6 @@ def encode_image_to_base64(image_path):
         return None
 
 def load_ticket_cache():
-    """
-    DB에서 모든 티켓 정보를 불러와 캐시에 저장 (이미지 URL 방식)
-    """
     global ticket_cache
     try:
         with engine.connect() as connection:
@@ -50,22 +47,31 @@ def load_ticket_cache():
 
             ticket_cache = []
             for row in tickets:
-                seat_image_url = f"http://localhost:8000/seat-image/{row.seat_image_name}" if row.seat_image_name else None
-
+                seat_image_url = (
+                    f"http://localhost:8000/seat-image/{row.seat_image_name}"
+                    if row.seat_image_name else None
+                )
                 ticket_cache.append({
                     "reservation_number": row.reservation_number,
                     "purchase_source": row.purchase_source,
                     "buyer": row.buyer,
-                    "purchase_date": row.purchase_date,
+                    "purchase_date": row.purchase_date.isoformat() if row.purchase_date else None,
                     "payment_amount": row.payment_amount,
+                    "payment_method": row.payment_method,
+                    "card_company": row.card_company,
+                    "card_number": row.card_number,
+                    "card_approval_number": row.card_approval_number,
+                    "product_use_date": row.product_use_date.isoformat() if row.product_use_date else None,
+                    "product_name": row.product_name,
+                    "purchase_quantity": row.purchase_quantity,  # 티켓 수
                     "seat_detail": row.seat_detail,
                     "seat_image_name": row.seat_image_name,
-                    "seat_image_url": seat_image_url  # ✅ Base64 대신 URL 사용
+                    "seat_image_url": seat_image_url
                 })
-
-            logging.info("✅ Successfully loaded %d tickets from the database.", len(ticket_cache))
+        logging.info("✅ 티켓 캐시 로드 성공, 총 티켓 수: %d", len(ticket_cache))
     except Exception as e:
-        logging.error("❌ Error loading ticket cache from the database: %s", e)
+        logging.error("❌ 티켓 캐시 로드 실패: %s", e)
+
 
 def get_cached_tickets():
     """

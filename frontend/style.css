@@ -102,8 +102,7 @@
 #addTicketForm input[type="text"],
 #addTicketForm input[type="datetime-local"],
 #addTicketForm input[type="number"],
-#addTicketForm input[type="file"],
-#addTicketForm input[type="month"] {
+#addTicketForm input[type="file"] {
   width: 100%;
   padding: 10px;
   margin: 5px 0 15px 0;

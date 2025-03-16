@@ -7,9 +7,7 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
   <h1>🎟 티켓 목록</h1>
-
   <table class="ticket-table">
     <thead>
       <tr>
@@ -18,25 +16,37 @@
         <th>구매자</th>
         <th>구매일</th>
         <th>결제금액</th>
+        <th>결제 방식</th>
+        <th>카드 회사</th>
+        <th>카드 번호</th>
+        <th>승인 번호</th>
+        <th>제품 사용일</th>
+        <th>제품 이름</th>
+        <th>티켓 수</th>
         <th>좌석 상세</th>
         <th>좌석 이미지</th>
+        <th>행동</th>
       </tr>
     </thead>
     <tbody id="ticketTableBody">
     </tbody>
   </table>
-
   <div class="button-container">
     <button id="openModalBtn">➕ 티켓 추가</button>
   </div>
 
-  <!-- ✅ 확대 이미지 모달 -->
+  <div class="button-container">
+    <button id="openModalBtn">➕ 티켓 추가</button>
+    <button id="refreshBtn">새로고침</button>
+  </div>
+
+  <!-- 확대 이미지 모달 -->
   <div id="imageModal" class="image-modal">
     <span class="close" onclick="closeImageModal()">&times;</span>
     <img id="modalImage" src="" alt="확대된 좌석 이미지">
   </div>
 
-  <!-- ★ 티켓 추가 모달 (새로 추가) -->
+  <!-- 티켓 추가 모달 -->
   <div id="addTicketModal" class="modal">
     <div class="modal-content">
       <span class="close" onclick="closeAddTicketModal()">&times;</span>
@@ -47,7 +57,16 @@
         <label>구매자: <input type="text" name="buyer" required></label><br>
         <label>구매일: <input type="datetime-local" name="purchase_date" required></label><br>
         <label>결제금액: <input type="number" name="payment_amount" required></label><br>
+        <!-- 카드 정보 -->
+        <fieldset style="margin-top:10px; padding:10px;">
+          <legend>카드 정보 (옵션)</legend>
+          <label>결제 방식: <input type="text" name="payment_method"></label><br>
+          <label>카드 회사: <input type="text" name="card_company"></label><br>
+          <label>카드 번호: <input type="text" name="card_number"></label><br>
+          <label>승인 번호: <input type="text" name="card_approval_number"></label><br>
+        </fieldset>
         <label>좌석 상세: <input type="text" name="seat_detail" required></label><br>
+        <label>티켓 수: <input type="number" name="ticket_count" required></label><br>
         <label>
           좌석 이미지:
           <input type="file" name="seat_image" id="seatImageInput">
@@ -55,12 +74,39 @@
         </label><br>
         <!-- 붙여넣은 이미지 미리보기 영역 -->
         <div id="pastedImagePreview" style="margin-bottom:15px;"></div>
-        <hr>
-        <!-- 신용카드 결제 정보 -->
-        <label>신용카드 번호: <input type="text" name="card_number" placeholder="카드 번호"></label><br>
-        <label>유효기간: <input type="month" name="card_expiry"></label><br>
-        <label>CVV: <input type="number" name="card_cvv"></label><br>
         <button type="submit">티켓 추가</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 티켓 수정 모달 -->
+  <div id="editTicketModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeEditTicketModal()">&times;</span>
+      <h2>티켓 수정</h2>
+      <form id="editTicketForm">
+        <!-- 예약번호는 수정 불가 (hidden) -->
+        <input type="hidden" name="reservation_number">
+        <label>구매처: <input type="text" name="purchase_source" required></label><br>
+        <label>구매자: <input type="text" name="buyer" required></label><br>
+        <label>구매일: <input type="datetime-local" name="purchase_date" required></label><br>
+        <label>결제금액: <input type="number" name="payment_amount" required></label><br>
+        <fieldset style="margin-top:10px; padding:10px;">
+          <legend>카드 정보 (옵션)</legend>
+          <label>결제 방식: <input type="text" name="payment_method"></label><br>
+          <label>카드 회사: <input type="text" name="card_company"></label><br>
+          <label>카드 번호: <input type="text" name="card_number"></label><br>
+          <label>승인 번호: <input type="text" name="card_approval_number"></label><br>
+        </fieldset>
+        <label>좌석 상세: <input type="text" name="seat_detail" required></label><br>
+        <label>티켓 수: <input type="number" name="ticket_count" required></label><br>
+        <label>
+          좌석 이미지:
+          <input type="file" name="seat_image" id="editSeatImageInput">
+          <small>또는 Ctrl+V로 붙여넣기</small>
+        </label><br>
+        <div id="editPastedImagePreview" style="margin-bottom:15px;"></div>
+        <button type="submit">티켓 수정</button>
       </form>
     </div>
   </div>

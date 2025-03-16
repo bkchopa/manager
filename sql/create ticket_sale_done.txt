@@ -1,0 +1,18 @@
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[ticket_sale_done](
+    [reservation_number] NVARCHAR(50) NOT NULL,  -- 주문번호 (ticket 테이블과 연결)
+    [order_date] DATETIME NOT NULL,              -- 주문일자
+    [buyer_name] NVARCHAR(50) NOT NULL,            -- 구매자 이름
+    [buyer_contact] NVARCHAR(50) NOT NULL,         -- 구매자 연락처
+    [product_category] NVARCHAR(255) NOT NULL,     -- 상품 카테고리 (<em class="bPath">의 내용)
+    [product_description] NVARCHAR(MAX) NOT NULL,  -- 상품 설명 및 좌석 정보 (<p> 태그의 내용)
+    [product_datetime] DATETIME NOT NULL,          -- 상품 일시
+    [unit_price] INT NOT NULL,                     -- 단일 가격
+    [deal_status] NVARCHAR(50) NOT NULL,           -- 거래 상태 (예: "판매완료", "판매중지" 등)
+    CONSTRAINT [PK_ticket_sale_done] PRIMARY KEY CLUSTERED (reservation_number ASC)
+) ON [PRIMARY]
+GO

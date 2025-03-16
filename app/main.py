@@ -44,16 +44,15 @@ app.add_middleware(
 )
 
 @app.get("/tickets")
-def get_tickets():
-    """
-    캐싱된 티켓 정보를 반환하는 API
-    """
-    logging.info("📢 /tickets API 호출됨")
-
-    tickets_data = get_cached_tickets()  # ✅ JSON 변환된 데이터 가져오기
-    logging.info(f"📜 반환 데이터: {json.dumps(tickets_data, indent=2, ensure_ascii=False)[:500]}...")
-
+def get_tickets(refresh: bool = False):
+    logging.info("📢 /tickets API 호출됨 (refresh=%s)", refresh)
+    if refresh:
+        load_ticket_cache()  # DB에서 최신 데이터 로드
+        logging.info("DB에서 최신 티켓 정보를 불러옴")
+    tickets_data = get_cached_tickets()
+    logging.info("📜 반환 데이터: %s", json.dumps(tickets_data, indent=2, ensure_ascii=False)[:500])
     return {"tickets": tickets_data}
+
 
 @app.get("/seat-image/{image_name}")
 def get_seat_image(image_name: str):
@@ -66,34 +65,186 @@ def get_seat_image(image_name: str):
     else:
         return {"error": "Image not found"}
 
+
 @app.post("/tickets")
 async def add_ticket(
-    reservation_number: str = Form(...),
-    purchase_source: str = Form(...),
-    buyer: str = Form(...),
-    purchase_date: str = Form(...),
-    payment_amount: int = Form(...),
-    seat_detail: str = Form(...),
-    seat_image: UploadFile = File(None)  # 이미지 파일 업로드 가능
+        reservation_number: str = Form(...),
+        purchase_source: str = Form(...),
+        buyer: str = Form(...),
+        purchase_date: str = Form(...),
+        payment_amount: int = Form(...),
+        seat_detail: str = Form(...),
+        ticket_count: int = Form(...),
+        payment_method: str = Form(...),  # 필수로 변경
+        card_company: str = Form(None),
+        card_number: str = Form(None),
+        card_approval_number: str = Form(None),
+        seat_image: UploadFile = File(None)
 ):
-    image_filename = None
-    if seat_image:
-        image_filename = f"{reservation_number}_{seat_image.filename}"
-        with open(os.path.join(UPLOAD_DIR, image_filename), "wb") as buffer:
-            shutil.copyfileobj(seat_image.file, buffer)
+    import datetime, os, shutil
+    logging.info("📝 add_ticket 호출됨. 예약번호: %s", reservation_number)
 
-    with engine.connect() as connection:
-        connection.execute(tickets_table.insert().values(
-            reservation_number=reservation_number,
-            purchase_source=purchase_source,
-            buyer=buyer,
-            purchase_date=purchase_date,
-            payment_amount=payment_amount,
-            seat_detail=seat_detail,
-            seat_image_name=image_filename
-        ))
+    # purchase_date 문자열을 datetime 객체로 변환
+    try:
+        purchase_date_dt = datetime.datetime.fromisoformat(purchase_date)
+        logging.info("📝 purchase_date 변환 성공: %s", purchase_date_dt)
+    except Exception as e:
+        logging.error("❌ purchase_date 변환 실패: %s", e)
+        purchase_date_dt = datetime.datetime.now()
+
+    product_use_date = purchase_date_dt
+    product_name = "티켓"
+
+    # 이미지 저장 처리: 파일명이 "ticket_{예약번호}{확장자}"로 저장되도록 함
+    image_filename = ""
+    if seat_image:
+        try:
+            original_filename = seat_image.filename
+            if original_filename == "":
+                logging.error("❌ 업로드된 이미지의 파일명이 비어 있습니다.")
+            ext = os.path.splitext(original_filename)[1]
+            if ext == "":
+                logging.error("❌ 파일 확장자가 없습니다. 파일명: %s", original_filename)
+            image_filename = f"ticket_{reservation_number}{ext}"
+            os.makedirs(SEAT_IMAGE_FOLDER, exist_ok=True)
+            full_path = os.path.join(SEAT_IMAGE_FOLDER, image_filename)
+            with open(full_path, "wb") as buffer:
+                shutil.copyfileobj(seat_image.file, buffer)
+            logging.info("📝 이미지 업로드 성공: %s", image_filename)
+        except Exception as e:
+            logging.error("❌ 이미지 업로드 실패: %s", e)
+            image_filename = ""
+    else:
+        logging.info("📝 이미지 파일이 전송되지 않았습니다.")
+
+    # DB에 티켓 정보 저장 (자동 커밋)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                tickets_table.insert().values(
+                    reservation_number=reservation_number,
+                    purchase_source=purchase_source,
+                    buyer=buyer,
+                    purchase_date=purchase_date_dt,  # datetime 객체 사용
+                    payment_amount=payment_amount,
+                    payment_method=payment_method,
+                    card_company=card_company,
+                    card_number=card_number,
+                    card_approval_number=card_approval_number,
+                    product_use_date=product_use_date,
+                    product_name=product_name,
+                    purchase_quantity=ticket_count,
+                    seat_detail=seat_detail,
+                    seat_image_name=image_filename
+                )
+            )
+        logging.info("📝 DB에 티켓 정보 저장 성공: 예약번호 %s", reservation_number)
+    except Exception as e:
+        logging.error("❌ DB 저장 중 오류 발생: %s", e)
+        raise e
 
     return {"message": "티켓이 추가되었습니다!"}
+
+
+from fastapi import HTTPException
+
+
+# 기존 POST /tickets 엔드포인트는 그대로 사용
+
+@app.patch("/tickets/{reservation_number}")
+async def update_ticket(
+        reservation_number: str,
+        purchase_source: str = Form(...),
+        buyer: str = Form(...),
+        purchase_date: str = Form(...),
+        payment_amount: int = Form(...),
+        payment_method: str = Form(...),  # 필수로 변경
+        card_company: str = Form(None),
+        card_number: str = Form(None),
+        card_approval_number: str = Form(None),
+        seat_detail: str = Form(...),
+        ticket_count: int = Form(...),
+        seat_image: UploadFile = File(None)
+):
+    import datetime, os, shutil
+    logging.info("Updating ticket: %s", reservation_number)
+
+    # purchase_date 문자열을 datetime 객체로 변환
+    try:
+        purchase_date_dt = datetime.datetime.fromisoformat(purchase_date)
+        logging.info("purchase_date 변환 성공: %s", purchase_date_dt)
+    except Exception as e:
+        logging.error("purchase_date 변환 실패: %s", e)
+        purchase_date_dt = datetime.datetime.now()
+
+    product_use_date = purchase_date_dt
+    product_name = "티켓"
+
+    # 이미지 저장 처리: 새 이미지가 제공되면 "ticket_{예약번호}{확장자}" 형식으로 SEAT_IMAGE_FOLDER에 저장
+    image_filename = None
+    if seat_image:
+        try:
+            original_filename = seat_image.filename
+            ext = os.path.splitext(original_filename)[1]  # 파일 확장자 추출
+            image_filename = f"ticket_{reservation_number}{ext}"
+            os.makedirs(SEAT_IMAGE_FOLDER, exist_ok=True)
+            full_path = os.path.join(SEAT_IMAGE_FOLDER, image_filename)
+            with open(full_path, "wb") as buffer:
+                shutil.copyfileobj(seat_image.file, buffer)
+            logging.info("이미지 저장 성공: %s", image_filename)
+        except Exception as e:
+            logging.error("이미지 저장 실패: %s", e)
+            image_filename = None
+
+    # DB 업데이트: 새 이미지가 저장되었으면 해당 파일명으로 업데이트, 없으면 기존 이미지 유지
+    try:
+        with engine.begin() as connection:
+            update_values = {
+                "purchase_source": purchase_source,
+                "buyer": buyer,
+                "purchase_date": purchase_date_dt,
+                "payment_amount": payment_amount,
+                "payment_method": payment_method,
+                "card_company": card_company,
+                "card_number": card_number,
+                "card_approval_number": card_approval_number,
+                "product_use_date": product_use_date,
+                "product_name": product_name,
+                "purchase_quantity": ticket_count,
+                "seat_detail": seat_detail,
+            }
+            if image_filename is not None:
+                update_values["seat_image_name"] = image_filename
+
+            update_query = tickets_table.update().where(
+                tickets_table.c.reservation_number == reservation_number
+            ).values(**update_values)
+            connection.execute(update_query)
+        logging.info("티켓 수정 성공: %s", reservation_number)
+    except Exception as e:
+        logging.error("티켓 수정 중 오류 발생: %s", e)
+        raise HTTPException(status_code=500, detail="티켓 수정 실패")
+
+    return {"message": "티켓이 수정되었습니다!"}
+
+
+
+@app.delete("/tickets/{reservation_number}")
+async def delete_ticket(reservation_number: str):
+    logging.info("Deleting ticket: %s", reservation_number)
+    try:
+        with engine.begin() as connection:
+            delete_query = tickets_table.delete().where(tickets_table.c.reservation_number == reservation_number)
+            result = connection.execute(delete_query)
+            if result.rowcount == 0:
+                raise HTTPException(status_code=404, detail="티켓을 찾을 수 없습니다.")
+        logging.info("티켓 삭제 성공: %s", reservation_number)
+    except Exception as e:
+        logging.error("티켓 삭제 중 오류 발생: %s", e)
+        raise HTTPException(status_code=500, detail="티켓 삭제 실패")
+
+    return {"message": "티켓이 삭제되었습니다!"}
+
 
 if __name__ == "__main__":
     logging.info("🔄 Uvicorn 서버 실행 중...")
