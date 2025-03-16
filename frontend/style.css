@@ -98,14 +98,35 @@
   text-decoration: none;
 }
 
-/* ★ 티켓 추가 폼 입력 필드 스타일 */
-#addTicketForm input[type="text"],
-#addTicketForm input[type="datetime-local"],
-#addTicketForm input[type="number"],
-#addTicketForm input[type="file"] {
+/* ★ 티켓 추가/수정/판매 등록 폼 입력 필드 스타일 */
+form input[type="text"],
+form input[type="datetime-local"],
+form input[type="number"],
+form input[type="file"],
+form textarea {
   width: 100%;
   padding: 10px;
   margin: 5px 0 15px 0;
   box-sizing: border-box;
   font-size: 16px;
+}
+
+
+/* 판매 내역 테이블 스타일 */
+.sale-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.sale-history-table th,
+.sale-history-table td {
+  padding: 8px;
+  border: 1px solid #ddd;
+  text-align: center;
+}
+
+.sale-history-table th {
+  background-color: #f4f4f4;
+  font-weight: bold;
 }

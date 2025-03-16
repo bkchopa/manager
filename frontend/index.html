@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>티켓 목록</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <h1>🎟 티켓 목록</h1>
@@ -29,11 +29,9 @@
       </tr>
     </thead>
     <tbody id="ticketTableBody">
+      <!-- 티켓 데이터가 동적으로 채워짐 -->
     </tbody>
   </table>
-  <div class="button-container">
-    <button id="openModalBtn">➕ 티켓 추가</button>
-  </div>
 
   <div class="button-container">
     <button id="openModalBtn">➕ 티켓 추가</button>
@@ -43,7 +41,7 @@
   <!-- 확대 이미지 모달 -->
   <div id="imageModal" class="image-modal">
     <span class="close" onclick="closeImageModal()">&times;</span>
-    <img id="modalImage" src="" alt="확대된 좌석 이미지">
+    <img id="modalImage" src="" alt="확대된 좌석 이미지" />
   </div>
 
   <!-- 티켓 추가 모달 -->
@@ -52,27 +50,25 @@
       <span class="close" onclick="closeAddTicketModal()">&times;</span>
       <h2>티켓 추가</h2>
       <form id="addTicketForm">
-        <label>예약번호: <input type="text" name="reservation_number" required></label><br>
-        <label>구매처: <input type="text" name="purchase_source" required></label><br>
-        <label>구매자: <input type="text" name="buyer" required></label><br>
-        <label>구매일: <input type="datetime-local" name="purchase_date" required></label><br>
-        <label>결제금액: <input type="number" name="payment_amount" required></label><br>
-        <!-- 카드 정보 -->
+        <label>예약번호: <input type="text" name="reservation_number" required /></label><br />
+        <label>구매처: <input type="text" name="purchase_source" required /></label><br />
+        <label>구매자: <input type="text" name="buyer" required /></label><br />
+        <label>구매일: <input type="datetime-local" name="purchase_date" required /></label><br />
+        <label>결제금액: <input type="number" name="payment_amount" required /></label><br />
         <fieldset style="margin-top:10px; padding:10px;">
           <legend>카드 정보 (옵션)</legend>
-          <label>결제 방식: <input type="text" name="payment_method"></label><br>
-          <label>카드 회사: <input type="text" name="card_company"></label><br>
-          <label>카드 번호: <input type="text" name="card_number"></label><br>
-          <label>승인 번호: <input type="text" name="card_approval_number"></label><br>
+          <label>결제 방식: <input type="text" name="payment_method" required /></label><br />
+          <label>카드 회사: <input type="text" name="card_company" /></label><br />
+          <label>카드 번호: <input type="text" name="card_number" /></label><br />
+          <label>승인 번호: <input type="text" name="card_approval_number" /></label><br />
         </fieldset>
-        <label>좌석 상세: <input type="text" name="seat_detail" required></label><br>
-        <label>티켓 수: <input type="number" name="ticket_count" required></label><br>
+        <label>좌석 상세: <input type="text" name="seat_detail" required /></label><br />
+        <label>티켓 수: <input type="number" name="ticket_count" required /></label><br />
         <label>
           좌석 이미지:
-          <input type="file" name="seat_image" id="seatImageInput">
+          <input type="file" name="seat_image" id="seatImageInput" />
           <small>또는 Ctrl+V로 붙여넣기</small>
-        </label><br>
-        <!-- 붙여넣은 이미지 미리보기 영역 -->
+        </label><br />
         <div id="pastedImagePreview" style="margin-bottom:15px;"></div>
         <button type="submit">티켓 추가</button>
       </form>
@@ -85,29 +81,79 @@
       <span class="close" onclick="closeEditTicketModal()">&times;</span>
       <h2>티켓 수정</h2>
       <form id="editTicketForm">
-        <!-- 예약번호는 수정 불가 (hidden) -->
-        <input type="hidden" name="reservation_number">
-        <label>구매처: <input type="text" name="purchase_source" required></label><br>
-        <label>구매자: <input type="text" name="buyer" required></label><br>
-        <label>구매일: <input type="datetime-local" name="purchase_date" required></label><br>
-        <label>결제금액: <input type="number" name="payment_amount" required></label><br>
+        <input type="hidden" name="reservation_number" />
+        <label>구매처: <input type="text" name="purchase_source" required /></label><br />
+        <label>구매자: <input type="text" name="buyer" required /></label><br />
+        <label>구매일: <input type="datetime-local" name="purchase_date" required /></label><br />
+        <label>결제금액: <input type="number" name="payment_amount" required /></label><br />
         <fieldset style="margin-top:10px; padding:10px;">
           <legend>카드 정보 (옵션)</legend>
-          <label>결제 방식: <input type="text" name="payment_method"></label><br>
-          <label>카드 회사: <input type="text" name="card_company"></label><br>
-          <label>카드 번호: <input type="text" name="card_number"></label><br>
-          <label>승인 번호: <input type="text" name="card_approval_number"></label><br>
+          <label>결제 방식: <input type="text" name="payment_method" required /></label><br />
+          <label>카드 회사: <input type="text" name="card_company" /></label><br />
+          <label>카드 번호: <input type="text" name="card_number" /></label><br />
+          <label>승인 번호: <input type="text" name="card_approval_number" /></label><br />
         </fieldset>
-        <label>좌석 상세: <input type="text" name="seat_detail" required></label><br>
-        <label>티켓 수: <input type="number" name="ticket_count" required></label><br>
+        <label>좌석 상세: <input type="text" name="seat_detail" required /></label><br />
+        <label>티켓 수: <input type="number" name="ticket_count" required /></label><br />
         <label>
           좌석 이미지:
-          <input type="file" name="seat_image" id="editSeatImageInput">
+          <input type="file" name="seat_image" id="editSeatImageInput" />
           <small>또는 Ctrl+V로 붙여넣기</small>
-        </label><br>
+        </label><br />
         <div id="editPastedImagePreview" style="margin-bottom:15px;"></div>
         <button type="submit">티켓 수정</button>
       </form>
+    </div>
+  </div>
+
+  <!-- 판매 등록 모달 -->
+  <div id="saleInfoModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeSaleInfoModal()">&times;</span>
+      <h2>판매 등록 정보</h2>
+      <label>요소값 붙여넣기:</label>
+      <textarea id="rawElementInput" rows="6" style="width:100%;" placeholder="여기에 HTML 요소를 붙여넣으세요"></textarea>
+      <button id="patchElementBtn">요소 패치</button>
+      <hr />
+      <form id="saleInfoForm">
+        <label>예매번호(티켓): <input type="text" name="reservation_number" readonly /></label><br />
+        <label>티켓 등급: <input type="text" name="ticket_grade" required /></label><br />
+        <label>티켓 위치: <input type="text" name="ticket_floor" required /></label><br />
+        <label>티켓 구역: <input type="text" name="ticket_area" required /></label><br />
+        <label>상품 카테고리: <input type="text" name="product_category" required /></label><br />
+        <label>상품 일시: <input type="text" name="product_datetime" required /></label><br />
+        <label>상품 설명: <input type="text" name="product_description" required /></label><br />
+        <label>가격: <input type="number" name="price" required /></label><br />
+        <label>수량: <input type="number" name="quantity" required /></label><br />
+        <input type="hidden" name="prodnum" />
+        <button type="submit">판매 등록</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ★ 판매 내역 모달 -->
+  <div id="saleHistoryModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeSaleHistoryModal()">&times;</span>
+      <h2>판매 내역</h2>
+      <table class="sale-history-table">
+        <thead>
+          <tr>
+            <th>제품번호(prodnum)</th>
+            <th>티켓 등급</th>
+            <th>티켓 위치</th>
+            <th>티켓 구역</th>
+            <th>상품 카테고리</th>
+            <th>상품 일시</th>
+            <th>상품 설명</th>
+            <th>가격</th>
+            <th>수량</th>
+          </tr>
+        </thead>
+        <tbody id="saleHistoryBody">
+          <!-- JS에서 동적으로 채워짐 -->
+        </tbody>
+      </table>
     </div>
   </div>
 

@@ -1,8 +1,12 @@
 import logging
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Query
+from sqlalchemy import select
+from app.database import engine
+from fastapi import HTTPException
 from contextlib import asynccontextmanager
 import uvicorn
 import os
+from app.models import ticket_sale_info  # ticket_sale_info 테이블 임포트 (models.py에 정의되어 있어야 함)
 import shutil
 from app.config import SEAT_IMAGE_FOLDER
 from fastapi.responses import FileResponse
@@ -11,6 +15,7 @@ from app.tickets import load_ticket_cache, get_cached_tickets
 from app.models import tickets_table
 import json
 from fastapi.middleware.cors import CORSMiddleware
+import datetime
 
 # ✅ 로깅 설정 (로그 포맷과 레벨 설정)
 logging.basicConfig(
@@ -245,6 +250,81 @@ async def delete_ticket(reservation_number: str):
 
     return {"message": "티켓이 삭제되었습니다!"}
 
+
+@app.post("/sale_info")
+async def register_sale_info(
+        reservation_number: str = Form(...),
+        prodnum: str = Form(...),
+        ticket_grade: str = Form(...),
+        ticket_floor: str = Form(...),
+        ticket_area: str = Form(...),
+        product_category: str = Form(...),
+        product_datetime: str = Form(...),
+        product_description: str = Form(...),
+        price: int = Form(...),
+        quantity: int = Form(...)
+):
+    # product_datetime 문자열을 datetime 객체로 변환
+    try:
+        product_datetime_dt = datetime.datetime.fromisoformat(product_datetime)
+        logging.info("product_datetime 변환 성공: %s", product_datetime_dt)
+    except Exception as e:
+        logging.error("product_datetime 변환 실패: %s", e)
+        product_datetime_dt = datetime.datetime.now()
+
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                ticket_sale_info.insert().values(
+                    reservation_number=reservation_number,
+                    prodnum=prodnum,
+                    ticket_grade=ticket_grade,
+                    ticket_floor=ticket_floor,
+                    ticket_area=ticket_area,
+                    product_category=product_category,
+                    product_datetime=product_datetime_dt,
+                    product_description=product_description,
+                    price=price,
+                    quantity=quantity
+                )
+            )
+        logging.info("판매 등록 정보 저장 성공: 예매번호 %s, 제품번호 %s", reservation_number, prodnum)
+        return {"message": "판매 등록 정보가 저장되었습니다!"}
+    except Exception as e:
+        logging.error("판매 등록 정보 저장 중 오류 발생: %s", e)
+        raise HTTPException(status_code=500, detail="판매 등록 정보 저장 실패")
+
+@app.get("/sale_info")
+def get_sale_info(reservation_number: str = Query(...)):
+    """
+    특정 예매번호에 대한 판매 등록 정보를 조회
+    예: /sale_info?reservation_number=test123
+    """
+    try:
+        with engine.connect() as connection:
+            query = select(ticket_sale_info).where(
+                ticket_sale_info.c.reservation_number == reservation_number
+            )
+            results = connection.execute(query).fetchall()
+
+        sale_info_list = []
+        for row in results:
+            sale_info_list.append({
+                "reservation_number": row.reservation_number,
+                "prodnum": row.prodnum,
+                "ticket_grade": row.ticket_grade,
+                "ticket_floor": row.ticket_floor,
+                "ticket_area": row.ticket_area,
+                "product_category": row.product_category,
+                "product_datetime": row.product_datetime.isoformat(),
+                "product_description": row.product_description,
+                "price": row.price,
+                "quantity": row.quantity
+            })
+
+        return {"sale_info": sale_info_list}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     logging.info("🔄 Uvicorn 서버 실행 중...")
