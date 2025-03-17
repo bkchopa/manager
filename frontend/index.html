@@ -106,15 +106,42 @@
     </div>
   </div>
 
-  <!-- 판매 등록 모달 (ticket_sale_info 등록) -->
+  <!-- 판매 등록 정보 모달 (ticket_sale_info 등록/목록) -->
   <div id="saleInfoModal" class="modal">
     <div class="modal-content">
       <span class="close" onclick="closeSaleInfoModal()">×</span>
       <h2>판매 등록 정보</h2>
-      <label>요소값 붙여넣기:</label>
-      <textarea id="rawElementInput" rows="6" style="width:100%;" placeholder="여기에 HTML 요소를 붙여넣으세요"></textarea>
-      <button id="patchElementBtn">요소 패치</button>
-      <hr>
+      <!-- 판매 등록 정보 목록 테이블 -->
+      <table class="sale-history-table">
+        <thead>
+          <tr>
+            <th>예매번호</th>
+            <th>제품번호</th>
+            <th>티켓 등급</th>
+            <th>티켓 위치</th>
+            <th>티켓 구역</th>
+            <th>상품 카테고리</th>
+            <th>상품 일시</th>
+            <th>상품 설명</th>
+            <th>가격</th>
+            <th>수량</th>
+            <th>판매 완료 정보</th>
+            <th>행동</th>
+          </tr>
+        </thead>
+        <tbody id="saleInfoTableBody">
+          <!-- JS에서 동적으로 채워짐 -->
+        </tbody>
+      </table>
+      <button onclick="openSaleInfoForm()">판매 등록 정보 추가</button>
+    </div>
+  </div>
+
+  <!-- 판매 등록 정보 입력 모달 (추가/수정) -->
+  <div id="saleInfoFormModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeSaleInfoFormModal()">×</span>
+      <h2>판매 등록 정보 입력</h2>
       <form id="saleInfoForm">
         <label>예매번호(티켓): <input type="text" name="reservation_number" readonly /></label><br>
         <label>티켓 등급: <input type="text" name="ticket_grade" required /></label><br>
@@ -125,9 +152,39 @@
         <label>상품 설명: <input type="text" name="product_description" required /></label><br>
         <label>가격: <input type="number" name="price" required /></label><br>
         <label>수량: <input type="number" name="quantity" required /></label><br>
-        <label>주문번호: <input type="text" name="order_number" readonly /></label><br>
         <input type="hidden" name="prodnum" />
-        <button type="submit">판매 등록</button>
+        <button type="submit">저장</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 판매 완료 정보 모달 (ticket_sale_done 등록/수정) -->
+  <div id="saleDoneModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeSaleDoneModal()">×</span>
+      <h2>판매 완료 정보 등록/수정</h2>
+      <label>요소값 붙여넣기:</label>
+      <textarea id="rawElementInputDone" rows="6" style="width:100%;" placeholder="여기에 HTML 요소를 붙여넣으세요"></textarea>
+      <button id="patchElementBtnDone">요소 패치</button>
+      <hr>
+      <form id="saleDoneForm">
+        <label>제품번호: <input type="text" name="prodnum" readonly /></label><br>
+        <label>주문번호: <input type="text" name="order_num" /></label><br>
+        <label>주문일자: <input type="text" name="order_date" required /></label><br>
+        <label>구매자 이름: <input type="text" name="buyer_name" required /></label><br>
+        <label>구매자 연락처: <input type="text" name="buyer_contact" required /></label><br>
+        <label>상품 카테고리: <input type="text" name="product_category" required /></label><br>
+        <label>상품 설명: <input type="text" name="product_description" required /></label><br>
+        <label>상품 일시: <input type="text" name="product_datetime" required /></label><br>
+        <label>단일 가격: <input type="number" name="unit_price" required /></label><br>
+        <label>거래 상태:
+          <select name="deal_status" required>
+            <option value="판매완료">판매완료</option>
+            <option value="판매중지">판매중지</option>
+          </select>
+        </label><br>
+        <label>비고: <textarea name="remark"></textarea></label><br>
+        <button type="submit">저장</button>
       </form>
     </div>
   </div>
@@ -156,10 +213,11 @@
             <th>행동</th>
           </tr>
         </thead>
-        <tbody id="saleDoneHistoryBody">
+        <tbody id="saleHistoryBody">
           <!-- JS에서 동적으로 채워짐 -->
         </tbody>
       </table>
+      <button onclick="openSaleDoneFormModal()">판매 완료 정보 추가</button>
     </div>
   </div>
 

@@ -1,49 +1,49 @@
 import logging
-from fastapi import FastAPI, UploadFile, File, Form, Query
+from typing import Optional
+
+from fastapi import FastAPI, UploadFile, File, Form, Query, HTTPException
 from sqlalchemy import select, delete
 from app.database import engine
-from fastapi import HTTPException
 from contextlib import asynccontextmanager
 import uvicorn
 import os
-from app.models import ticket_sale_info  # ticket_sale_info 테이블 임포트 (models.py에 정의되어 있어야 함)
+from app.models import ticket_sale_info  # models.py에 정의되어 있어야 함
 from app.models import ticket_sale_done
 import shutil
 from app.config import SEAT_IMAGE_FOLDER
 from fastapi.responses import FileResponse
-from app.database import check_db_connection, engine  # ✅ DB 연결 확인 로그 추가
+from app.database import check_db_connection, engine
 from app.tickets import load_ticket_cache, get_cached_tickets
 from app.models import tickets_table
 import json
 from fastapi.middleware.cors import CORSMiddleware
 import datetime
+from fastapi.staticfiles import StaticFiles
 
-# ✅ 로깅 설정 (로그 포맷과 레벨 설정)
+
+
+
 logging.basicConfig(
-    level=logging.INFO,  # 로그 레벨 (INFO 이상만 출력)
-    format="%(asctime)s - %(levelname)s - %(message)s",  # 로그 포맷 설정
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 
 UPLOAD_DIR = "uploaded_images"
-os.makedirs(UPLOAD_DIR, exist_ok=True)  # 폴더 없으면 생성
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    FastAPI 서버의 Lifecycle 이벤트 핸들러 (서버 시작 시 실행)
-    """
-    logging.info("🚀 FastAPI 서버 시작!")  # ✅ FastAPI 서버 시작 로그 추가
-    check_db_connection()  # ✅ DB 연결 확인 로그 출력
-    load_ticket_cache()  # ✅ 서버 시작 시 캐시 로드
-    yield  # 서버 종료 시 정리할 작업 추가 가능
-    logging.info("🛑 FastAPI 서버 종료!")  # ✅ FastAPI 서버 종료 로그 추가
+    logging.info("🚀 FastAPI 서버 시작!")
+    check_db_connection()
+    load_ticket_cache()
+    yield
+    logging.info("🛑 FastAPI 서버 종료!")
 
-# FastAPI 인스턴스 생성
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # ✅ 모든 도메인에서 API 요청 허용 (보안상 필요하면 특정 도메인만 허용)
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -53,24 +53,19 @@ app.add_middleware(
 def get_tickets(refresh: bool = False):
     logging.info("📢 /tickets API 호출됨 (refresh=%s)", refresh)
     if refresh:
-        load_ticket_cache()  # DB에서 최신 데이터 로드
+        load_ticket_cache()
         logging.info("DB에서 최신 티켓 정보를 불러옴")
     tickets_data = get_cached_tickets()
     logging.info("📜 반환 데이터: %s", json.dumps(tickets_data, indent=2, ensure_ascii=False)[:500])
     return {"tickets": tickets_data}
 
-
 @app.get("/seat-image/{image_name}")
 def get_seat_image(image_name: str):
-    """
-    좌석 이미지 파일을 반환하는 API
-    """
     image_path = os.path.join(SEAT_IMAGE_FOLDER, image_name)
     if os.path.exists(image_path):
         return FileResponse(image_path)
     else:
         return {"error": "Image not found"}
-
 
 @app.post("/tickets")
 async def add_ticket(
@@ -81,7 +76,7 @@ async def add_ticket(
         payment_amount: int = Form(...),
         seat_detail: str = Form(...),
         ticket_count: int = Form(...),
-        payment_method: str = Form(...),  # 필수로 변경
+        payment_method: str = Form(...),
         card_company: str = Form(None),
         card_number: str = Form(None),
         card_approval_number: str = Form(None),
@@ -89,8 +84,6 @@ async def add_ticket(
 ):
     import datetime, os, shutil
     logging.info("📝 add_ticket 호출됨. 예약번호: %s", reservation_number)
-
-    # purchase_date 문자열을 datetime 객체로 변환
     try:
         purchase_date_dt = datetime.datetime.fromisoformat(purchase_date)
         logging.info("📝 purchase_date 변환 성공: %s", purchase_date_dt)
@@ -101,7 +94,6 @@ async def add_ticket(
     product_use_date = purchase_date_dt
     product_name = "티켓"
 
-    # 이미지 저장 처리: 파일명이 "ticket_{예약번호}{확장자}"로 저장되도록 함
     image_filename = ""
     if seat_image:
         try:
@@ -123,7 +115,6 @@ async def add_ticket(
     else:
         logging.info("📝 이미지 파일이 전송되지 않았습니다.")
 
-    # DB에 티켓 정보 저장 (자동 커밋)
     try:
         with engine.begin() as connection:
             connection.execute(
@@ -131,7 +122,7 @@ async def add_ticket(
                     reservation_number=reservation_number,
                     purchase_source=purchase_source,
                     buyer=buyer,
-                    purchase_date=purchase_date_dt,  # datetime 객체 사용
+                    purchase_date=purchase_date_dt,
                     payment_amount=payment_amount,
                     payment_method=payment_method,
                     card_company=card_company,
@@ -151,12 +142,6 @@ async def add_ticket(
 
     return {"message": "티켓이 추가되었습니다!"}
 
-
-from fastapi import HTTPException
-
-
-# 기존 POST /tickets 엔드포인트는 그대로 사용
-
 @app.patch("/tickets/{reservation_number}")
 async def update_ticket(
         reservation_number: str,
@@ -164,7 +149,7 @@ async def update_ticket(
         buyer: str = Form(...),
         purchase_date: str = Form(...),
         payment_amount: int = Form(...),
-        payment_method: str = Form(...),  # 필수로 변경
+        payment_method: str = Form(...),
         card_company: str = Form(None),
         card_number: str = Form(None),
         card_approval_number: str = Form(None),
@@ -174,8 +159,6 @@ async def update_ticket(
 ):
     import datetime, os, shutil
     logging.info("Updating ticket: %s", reservation_number)
-
-    # purchase_date 문자열을 datetime 객체로 변환
     try:
         purchase_date_dt = datetime.datetime.fromisoformat(purchase_date)
         logging.info("purchase_date 변환 성공: %s", purchase_date_dt)
@@ -186,12 +169,11 @@ async def update_ticket(
     product_use_date = purchase_date_dt
     product_name = "티켓"
 
-    # 이미지 저장 처리: 새 이미지가 제공되면 "ticket_{예약번호}{확장자}" 형식으로 SEAT_IMAGE_FOLDER에 저장
     image_filename = None
     if seat_image:
         try:
             original_filename = seat_image.filename
-            ext = os.path.splitext(original_filename)[1]  # 파일 확장자 추출
+            ext = os.path.splitext(original_filename)[1]
             image_filename = f"ticket_{reservation_number}{ext}"
             os.makedirs(SEAT_IMAGE_FOLDER, exist_ok=True)
             full_path = os.path.join(SEAT_IMAGE_FOLDER, image_filename)
@@ -202,7 +184,6 @@ async def update_ticket(
             logging.error("이미지 저장 실패: %s", e)
             image_filename = None
 
-    # DB 업데이트: 새 이미지가 저장되었으면 해당 파일명으로 업데이트, 없으면 기존 이미지 유지
     try:
         with engine.begin() as connection:
             update_values = {
@@ -233,8 +214,6 @@ async def update_ticket(
 
     return {"message": "티켓이 수정되었습니다!"}
 
-
-
 @app.delete("/tickets/{reservation_number}")
 async def delete_ticket(reservation_number: str):
     logging.info("Deleting ticket: %s", reservation_number)
@@ -248,9 +227,7 @@ async def delete_ticket(reservation_number: str):
     except Exception as e:
         logging.error("티켓 삭제 중 오류 발생: %s", e)
         raise HTTPException(status_code=500, detail="티켓 삭제 실패")
-
     return {"message": "티켓이 삭제되었습니다!"}
-
 
 @app.post("/sale_info")
 async def register_sale_info(
@@ -265,7 +242,6 @@ async def register_sale_info(
         price: int = Form(...),
         quantity: int = Form(...)
 ):
-    # product_datetime 문자열을 datetime 객체로 변환
     try:
         product_datetime_dt = datetime.datetime.fromisoformat(product_datetime)
         logging.info("product_datetime 변환 성공: %s", product_datetime_dt)
@@ -297,10 +273,6 @@ async def register_sale_info(
 
 @app.get("/sale_info")
 def get_sale_info(reservation_number: str = Query(...)):
-    """
-    특정 예매번호에 대한 판매 등록 정보를 조회
-    예: /sale_info?reservation_number=test123
-    """
     try:
         with engine.connect() as connection:
             query = select(ticket_sale_info).where(
@@ -322,8 +294,38 @@ def get_sale_info(reservation_number: str = Query(...)):
                 "price": row.price,
                 "quantity": row.quantity
             })
-
         return {"sale_info": sale_info_list}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# GET 엔드포인트를 "/sale_done_list"로 분리 (GET 방식)
+@app.get("/sale_done_list")
+def get_sale_done_list(reservation_number: Optional[str] = None, prodnum: Optional[str] = None):
+    try:
+        with engine.connect() as connection:
+            query = select(ticket_sale_done)
+            if prodnum:
+                query = query.where(ticket_sale_done.c.prodnum == prodnum)
+            elif reservation_number:
+                query = query.where(ticket_sale_done.c.reservation_number == reservation_number)
+            results = connection.execute(query).fetchall()
+            sale_done_list = []
+            for row in results:
+                sale_done_list.append({
+                    # "reservation_number": row.reservation_number,  # 제거 (해당 컬럼 없음)
+                    "prodnum": row.prodnum,
+                    "order_num": row.order_num,
+                    "ticket_grade": row.ticket_grade,
+                    "ticket_floor": row.ticket_floor,
+                    "ticket_area": row.ticket_area,
+                    "product_category": row.product_category,
+                    "product_datetime": row.product_datetime.isoformat() if row.product_datetime else None,
+                    "product_description": row.product_description,
+                    "unit_price": row.unit_price,
+                    "deal_status": row.deal_status,
+                    "remark": row.remark
+                })
+        return {"sale_done": sale_done_list}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -340,9 +342,8 @@ async def register_sale_done(
         product_datetime: str = Form(...),
         unit_price: int = Form(...),
         deal_status: str = Form(...),
-        remark: str = Form("")  # remark는 이제 nullable
+        remark: str = Form("")
 ):
-    import datetime
     try:
         order_date_dt = datetime.datetime.fromisoformat(order_date)
     except Exception as e:
@@ -374,21 +375,6 @@ async def register_sale_done(
     except Exception as e:
         logging.error("판매 완료 등록 오류: %s", e)
         raise HTTPException(status_code=500, detail="판매 완료 등록 실패")
-
-@app.delete("/sale_done/{prodnum}")
-def delete_sale_done(prodnum: str):
-    """
-    prodnum(주문번호)에 해당하는 판매 완료 정보를 삭제합니다.
-    """
-    try:
-        with engine.begin() as connection:
-            delete_query = delete(ticket_sale_done).where(ticket_sale_done.c.prodnum == prodnum)
-            result = connection.execute(delete_query)
-            if result.rowcount == 0:
-                raise HTTPException(status_code=404, detail="판매 완료 정보를 찾을 수 없습니다.")
-        return {"message": "판매 완료 정보가 삭제되었습니다!"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/sale_done/{order_num}")
 async def update_sale_done(order_num: str,
@@ -424,6 +410,18 @@ async def update_sale_done(order_num: str,
     except Exception as e:
         logging.error("판매 완료 정보 업데이트 중 오류 발생: %s", e)
         raise HTTPException(status_code=500, detail="판매 완료 정보 업데이트 실패")
+
+@app.delete("/sale_done/{prodnum}")
+def delete_sale_done(prodnum: str):
+    try:
+        with engine.begin() as connection:
+            delete_query = delete(ticket_sale_done).where(ticket_sale_done.c.prodnum == prodnum)
+            result = connection.execute(delete_query)
+            if result.rowcount == 0:
+                raise HTTPException(status_code=404, detail="판매 완료 정보를 찾을 수 없습니다.")
+        return {"message": "판매 완료 정보가 삭제되었습니다!"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     logging.info("🔄 Uvicorn 서버 실행 중...")

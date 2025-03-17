@@ -10,16 +10,14 @@ document.addEventListener("DOMContentLoaded", function() {
   const saleInfoModal = document.getElementById("saleInfoModal");
   const saleHistoryModal = document.getElementById("saleHistoryModal");
   const saleDoneModal = document.getElementById("saleDoneModal");
+  const saleInfoFormModal = document.getElementById("saleInfoFormModal"); // 선택적 사용
 
   const addTicketForm = document.getElementById("addTicketForm");
   const editTicketForm = document.getElementById("editTicketForm");
   const saleInfoForm = document.getElementById("saleInfoForm");
   const saleDoneForm = document.getElementById("saleDoneForm");
 
-  const saleDoneHistoryBody = document.getElementById("saleDoneHistoryBody");
-
-  const rawElementInput = document.getElementById("rawElementInput");
-  const patchElementBtn = document.getElementById("patchElementBtn");
+  const saleHistoryBody = document.getElementById("saleHistoryBody");
 
   const rawElementInputDone = document.getElementById("rawElementInputDone");
   const patchElementBtnDone = document.getElementById("patchElementBtnDone");
@@ -27,7 +25,11 @@ document.addEventListener("DOMContentLoaded", function() {
   // 전역 변수: 판매 완료 update 모드 여부
   let currentSaleDoneOrderNum = null;
 
-  // 티켓 목록 불러오기 및 렌더링
+  // -------------------------------
+  // 함수 선언부
+  // -------------------------------
+
+  // 티켓 목록 불러오기
   async function fetchTickets(refresh = false) {
     try {
       let url = "http://localhost:8000/tickets";
@@ -67,8 +69,7 @@ document.addEventListener("DOMContentLoaded", function() {
           <td>
             <button onclick='openEditTicketModal(${JSON.stringify(ticket)})'>수정</button>
             <button onclick="deleteTicket('${ticket.reservation_number}')">삭제</button>
-            <button onclick="openSaleInfoModalFromTicket(${JSON.stringify(ticket)})">판매 등록</button>
-            <button onclick="openSaleHistoryModal('${ticket.reservation_number}')">판매 내역</button>
+            <button onclick="openSaleInfoModal('${ticket.reservation_number}')">판매 등록 정보</button>
           </td>
         `;
         tableBody.appendChild(row);
@@ -89,7 +90,7 @@ document.addEventListener("DOMContentLoaded", function() {
     imageModal.style.display = "none";
   }
 
-  // 티켓 추가 모달 처리
+  // 티켓 추가 모달
   function openAddTicketModal() {
     addTicketModal.style.display = "block";
   }
@@ -136,7 +137,7 @@ document.addEventListener("DOMContentLoaded", function() {
     }
   });
 
-  // 티켓 수정 모달 처리
+  // 티켓 수정 모달
   function openEditTicketModal(ticket) {
     editTicketModal.style.display = "block";
     editTicketForm.elements["reservation_number"].value = ticket.reservation_number;
@@ -195,67 +196,66 @@ document.addEventListener("DOMContentLoaded", function() {
     }
   });
 
-  // 판매 등록 모달 처리 (ticket_sale_info 등록)
-  patchElementBtn.addEventListener("click", function() {
-    console.log("요소 패치 버튼 클릭됨");
-    const rawHtml = rawElementInput.value;
-    if (!rawHtml) {
-      alert("먼저 HTML 요소값을 붙여넣으세요.");
-      return;
+  // 판매 등록 정보 모달 처리 (ticket_sale_info 조회/목록)
+  async function openSaleInfoModal(reservationNumber) {
+    try {
+      const response = await fetch(`http://localhost:8000/sale_info?reservation_number=${reservationNumber}`);
+      if (!response.ok) throw new Error(`GET /sale_info failed: ${response.status}`);
+      const data = await response.json();
+      console.log("sale_info data:", data);
+      const saleInfoTableBody = document.getElementById("saleInfoTableBody");
+      saleInfoTableBody.innerHTML = "";
+      if (!data.sale_info || data.sale_info.length === 0) {
+        saleInfoTableBody.innerHTML = `<tr><td colspan="12">판매 등록 정보가 없습니다.</td></tr>`;
+      } else {
+        data.sale_info.forEach(item => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${item.reservation_number}</td>
+            <td>${item.prodnum}</td>
+            <td>${item.ticket_grade}</td>
+            <td>${item.ticket_floor}</td>
+            <td>${item.ticket_area}</td>
+            <td>${item.product_category}</td>
+            <td>${item.product_datetime}</td>
+            <td>${item.product_description}</td>
+            <td>${item.price}</td>
+            <td>${item.quantity || ""}</td>
+            <td>
+              <button onclick='openSaleHistoryModal("${item.prodnum}")'>판매 완료 정보</button>
+            </td>
+            <td>
+              <button onclick="deleteSaleInfo('${item.prodnum}')">삭제</button>
+            </td>
+          `;
+          saleInfoTableBody.appendChild(row);
+        });
+      }
+      saleInfoModal.style.display = "block";
+    } catch (error) {
+      console.error("Error fetching sale_info:", error);
+      alert("판매 등록 정보를 불러오는 중 오류가 발생했습니다.");
     }
-    const parser = new DOMParser();
-    const wrappedHtml = `<table>${rawHtml}</table>`;
-    const doc = parser.parseFromString(wrappedHtml, "text/html");
-    const trElement = doc.querySelector("tr");
-    if (!trElement) {
-      alert("유효한 tr 요소가 없습니다.");
-      return;
-    }
-    const orderInfoLink = trElement.querySelector(".orderInfo a");
-    const order_number = orderInfoLink ? orderInfoLink.textContent.trim() : "";
-    console.log("추출된 주문번호:", order_number);
-    const emTag = trElement.querySelector(".tbProductInfo em.bPath");
-    const pTag = trElement.querySelector(".tbProductInfo p");
-    const product_category = emTag ? emTag.textContent.trim() : "";
-    const product_description = pTag ? pTag.textContent.trim() : "";
-    const product_info = (product_category + " " + product_description).trim();
-    const iTag = trElement.querySelector(".tbProductInfo i");
-    const product_datetime = iTag ? iTag.textContent.trim() : "";
-    const priceEl = trElement.querySelector("span.bePrice02 em");
-    const price = priceEl ? parseInt(priceEl.textContent.replace(/,/g, '')) : 0;
-    const bePrice05El = trElement.querySelector("span.bePrice05");
-    let quantity = 0;
-    if (bePrice05El) {
-      const qtyMatch = bePrice05El.textContent.match(/X(\d+)/);
-      if (qtyMatch) quantity = parseInt(qtyMatch[1]);
-    }
-    saleInfoForm.elements["order_number"].value = order_number;
-    saleInfoForm.elements["product_info"].value = product_info;
-    saleInfoForm.elements["product_datetime"].value = product_datetime;
-    saleInfoForm.elements["price"].value = price;
-    saleInfoForm.elements["quantity"].value = quantity;
-    // prodnum는 productDetail 링크에서 추출
-    let prodnum = "";
-    const prodLink = trElement.querySelector(".tbProductInfo a");
-    if (prodLink) {
-      const match = prodLink.getAttribute("href").match(/detail\('(\d+)'\)/);
-      if (match) prodnum = match[1];
-    }
-    saleInfoForm.elements["prodnum"].value = prodnum;
-  });
-  function openSaleInfoModalFromTicket(ticket) {
-    saleInfoModal.style.display = "block";
-    saleInfoForm.elements["reservation_number"].value = ticket.reservation_number || "";
-    saleInfoForm.elements["order_number"].value = "";
-    saleInfoForm.elements["product_info"].value = "";
-    saleInfoForm.elements["product_datetime"].value = "";
-    saleInfoForm.elements["price"].value = "";
-    saleInfoForm.elements["quantity"].value = "";
-    saleInfoForm.elements["prodnum"].value = "";
   }
+
+  async function deleteSaleInfo(prodnum) {
+    if (confirm("해당 판매 등록 정보를 삭제하시겠습니까?")) {
+      try {
+        const response = await fetch(`http://localhost:8000/sale_info/${prodnum}`, { method: "DELETE" });
+        if (!response.ok) throw new Error("삭제 실패");
+        alert("판매 등록 정보가 삭제되었습니다!");
+        fetchTickets();
+      } catch (error) {
+        console.error("Error deleting sale info:", error);
+        alert("판매 등록 정보 삭제에 실패했습니다.");
+      }
+    }
+  }
+
   function closeSaleInfoModal() {
     saleInfoModal.style.display = "none";
   }
+
   saleInfoForm.addEventListener("submit", async function(event) {
     event.preventDefault();
     const formData = new FormData(saleInfoForm);
@@ -271,93 +271,95 @@ document.addEventListener("DOMContentLoaded", function() {
     }
   });
 
-  // 판매 완료 등록/수정 모달 처리 (ticket_sale_done 등록/수정)
-  patchElementBtnDone.addEventListener("click", function() {
-    console.log("판매 완료 요소 패치 버튼 클릭됨");
-    const rawHtml = rawElementInputDone.value;
-    if (!rawHtml) {
-      alert("먼저 HTML 요소값을 붙여넣으세요.");
-      return;
-    }
-    const parser = new DOMParser();
-    const wrappedHtml = `<table>${rawHtml}</table>`;
-    const doc = parser.parseFromString(wrappedHtml, "text/html");
-    const trElement = doc.querySelector("tr");
-    if (!trElement) {
-      alert("유효한 tr 요소가 없습니다.");
-      return;
-    }
-    const prodnum = trElement.getAttribute("data-ordnum") || "";
-    console.log("추출된 제품번호 (prodnum):", prodnum);
-    let order_num = "";
-    const productLink = trElement.querySelector(".tbProductInfo a");
-    if (productLink) {
-      const match = productLink.getAttribute("href").match(/productDetail\('(\d+)'\)/);
-      if (match) order_num = match[1];
-    }
-    console.log("추출된 주문번호 (order_num):", order_num);
-    let order_date = "";
-    const orderInfoDiv = trElement.querySelector(".orderInfo");
-    if (orderInfoDiv) {
-      const emTag = orderInfoDiv.querySelector("em");
-      if (emTag) order_date = emTag.textContent.trim();
-    }
-    console.log("추출된 주문일자:", order_date);
-    let buyer_name = "";
-    let buyer_contact = "";
-    const pinLayer = trElement.querySelector(".pin_popup_layer2");
-    if (pinLayer) {
-      const nameDd = pinLayer.querySelector("dl:nth-of-type(1) dd");
-      buyer_name = nameDd ? nameDd.textContent.trim() : "";
-      const contactDd = pinLayer.querySelector("dl:nth-of-type(2) dd.txt_phone");
-      if (contactDd) {
-        const contactText = contactDd.textContent;
-        buyer_contact = contactText ? contactText.replace(/[^\d\-]/g, "").trim() : "";
-      }
-    }
-    console.log("추출된 구매자 이름:", buyer_name);
-    console.log("추출된 구매자 연락처:", buyer_contact);
-    let product_category = "";
-    const categoryTag = trElement.querySelector(".tbProductInfo em.bPath");
-    if (categoryTag) product_category = categoryTag.textContent.trim();
-    console.log("추출된 상품 카테고리:", product_category);
-    let product_description = "";
-    const descTag = trElement.querySelector(".tbProductInfo p");
-    if (descTag) product_description = descTag.textContent.trim();
-    console.log("추출된 상품 설명:", product_description);
-    let product_datetime = "";
-    const datetimeTag = trElement.querySelector(".tbProductInfo i");
-    if (datetimeTag) product_datetime = datetimeTag.textContent.trim();
-    console.log("추출된 상품 일시:", product_datetime);
-    let unit_price = 0;
-    const priceEl = trElement.querySelector("span.bePrice02 em");
-    if (priceEl) unit_price = parseInt(priceEl.textContent.replace(/,/g, ''));
-    console.log("추출된 단일 가격:", unit_price);
-    let quantity = 0;
-    const quantityEl = trElement.querySelector("span.bePrice05");
-    if (quantityEl) {
-      const qtyMatch = quantityEl.textContent.match(/X(\d+)/);
-      if (qtyMatch) quantity = parseInt(qtyMatch[1]);
-    }
-    console.log("추출된 수량:", quantity);
-    const deal_status = "판매완료";
-    const remark = "";
-
-    saleDoneForm.elements["prodnum"].value = prodnum;
-    saleDoneForm.elements["order_num"].value = order_num;
-    saleDoneForm.elements["order_date"].value = order_date;
-    saleDoneForm.elements["buyer_name"].value = buyer_name;
-    saleDoneForm.elements["buyer_contact"].value = buyer_contact;
-    saleDoneForm.elements["product_category"].value = product_category;
-    saleDoneForm.elements["product_description"].value = product_description;
-    saleDoneForm.elements["product_datetime"].value = product_datetime;
-    saleDoneForm.elements["unit_price"].value = unit_price;
-    saleDoneForm.elements["quantity"].value = quantity;
-    saleDoneForm.elements["deal_status"].value = deal_status;
-    saleDoneForm.elements["remark"].value = remark;
-
+  // 판매 등록 정보 추가(신규) 모달 열기
+  function openSaleInfoForm() {
+    saleInfoForm.reset();
     currentSaleDoneOrderNum = null;
-  });
+    saleInfoModal.style.display = "block";
+  }
+  window.openSaleInfoForm = openSaleInfoForm;
+
+  // 판매 완료 모달 처리 (ticket_sale_done 등록/수정)
+  patchElementBtnDone.addEventListener("click", function() {
+      console.log("판매 완료 요소 패치 버튼 클릭됨");
+      const rawHtml = rawElementInputDone.value;
+      if (!rawHtml) {
+        alert("먼저 HTML 요소값을 붙여넣으세요.");
+        return;
+      }
+      const parser = new DOMParser();
+      const wrappedHtml = `<table>${rawHtml}</table>`;
+      const doc = parser.parseFromString(wrappedHtml, "text/html");
+      const trElement = doc.querySelector("tr");
+      if (!trElement) {
+        alert("유효한 tr 요소가 없습니다.");
+        return;
+      }
+      // 수정: data-ordnum은 주문번호(order_num)로 사용
+      const order_num = trElement.getAttribute("data-ordnum") || "";
+      let prodnum = "";
+      const productLink = trElement.querySelector(".tbProductInfo a");
+      if (productLink) {
+        const match = productLink.getAttribute("href").match(/productDetail\('(\d+)'\)/);
+        if (match) prodnum = match[1];
+      }
+      console.log("추출된 제품번호 (prodnum):", prodnum);
+      let order_date = "";
+      const orderInfoDiv = trElement.querySelector(".orderInfo");
+      if (orderInfoDiv) {
+        const emTag = orderInfoDiv.querySelector("em");
+        if (emTag) order_date = emTag.textContent.trim();
+      }
+      console.log("추출된 주문일자:", order_date);
+      let buyer_name = "";
+      let buyer_contact = "";
+      const pinLayer = trElement.querySelector(".pin_popup_layer2");
+      if (pinLayer) {
+        const nameDd = pinLayer.querySelector("dl:nth-of-type(1) dd");
+        buyer_name = nameDd ? nameDd.textContent.trim() : "";
+        const contactDd = pinLayer.querySelector("dl:nth-of-type(2) dd.txt_phone");
+        if (contactDd) {
+          const contactText = contactDd.textContent;
+          buyer_contact = contactText ? contactText.replace(/[^\d\-]/g, "").trim() : "";
+        }
+      }
+      console.log("추출된 구매자 이름:", buyer_name);
+      console.log("추출된 구매자 연락처:", buyer_contact);
+      let product_category = "";
+      const categoryTag = trElement.querySelector(".tbProductInfo em.bPath");
+      if (categoryTag) product_category = categoryTag.textContent.trim();
+      console.log("추출된 상품 카테고리:", product_category);
+      let product_description = "";
+      const descTag = trElement.querySelector(".tbProductInfo p");
+      if (descTag) product_description = descTag.textContent.trim();
+      console.log("추출된 상품 설명:", product_description);
+      let product_datetime = "";
+      const datetimeTag = trElement.querySelector(".tbProductInfo i");
+      if (datetimeTag) product_datetime = datetimeTag.textContent.trim();
+      console.log("추출된 상품 일시:", product_datetime);
+      let unit_price = 0;
+      const priceEl = trElement.querySelector("span.bePrice02 em");
+      if (priceEl) unit_price = parseInt(priceEl.textContent.replace(/,/g, ''));
+      console.log("추출된 단일 가격:", unit_price);
+      const deal_status = "판매완료";
+      const remark = "";
+
+      // 올바른 할당: 주문번호와 제품번호를 바꿔서 저장
+      saleDoneForm.elements["order_num"].value = order_num;
+      saleDoneForm.elements["prodnum"].value = prodnum;
+      saleDoneForm.elements["order_date"].value = order_date;
+      saleDoneForm.elements["buyer_name"].value = buyer_name;
+      saleDoneForm.elements["buyer_contact"].value = buyer_contact;
+      saleDoneForm.elements["product_category"].value = product_category;
+      saleDoneForm.elements["product_description"].value = product_description;
+      saleDoneForm.elements["product_datetime"].value = product_datetime;
+      saleDoneForm.elements["unit_price"].value = unit_price;
+      saleDoneForm.elements["deal_status"].value = deal_status;
+      saleDoneForm.elements["remark"].value = remark;
+
+      currentSaleDoneOrderNum = null;
+    });
+
 
   function openSaleDoneModalFromSaleInfo(saleInfoRecord) {
     closeSaleHistoryModal();
@@ -371,7 +373,6 @@ document.addEventListener("DOMContentLoaded", function() {
     saleDoneForm.elements["product_description"].value = saleInfoRecord.product_description;
     saleDoneForm.elements["product_datetime"].value = saleInfoRecord.product_datetime;
     saleDoneForm.elements["unit_price"].value = saleInfoRecord.price;
-    saleDoneForm.elements["quantity"].value = saleInfoRecord.quantity;
     saleDoneForm.elements["deal_status"].value = "판매완료";
     saleDoneForm.elements["remark"].value = "";
 
@@ -415,12 +416,11 @@ document.addEventListener("DOMContentLoaded", function() {
     }
   }
 
-  async function openSaleHistoryModal(reservationNumber) {
-    console.log("openSaleHistoryModal - reservationNumber:", reservationNumber);
+  async function openSaleHistoryModal(prodnum) {
+    console.log("openSaleHistoryModal - prodnum:", prodnum);
     try {
-      // 이 모달은 [ticket_sale_done] 정보를 조회합니다.
-      const response = await fetch(`http://localhost:8000/sale_done?reservation_number=${reservationNumber}`);
-      if (!response.ok) throw new Error(`GET /sale_done failed: ${response.status}`);
+      const response = await fetch(`http://localhost:8000/sale_done_list?prodnum=${prodnum}`);
+      if (!response.ok) throw new Error(`GET /sale_done_list failed: ${response.status}`);
       const data = await response.json();
       console.log("sale_done data:", data);
       const saleHistoryBody = document.getElementById("saleHistoryBody");
@@ -441,7 +441,7 @@ document.addEventListener("DOMContentLoaded", function() {
             <td>${item.product_datetime}</td>
             <td>${item.product_description}</td>
             <td>${item.unit_price}</td>
-            <td>${item.quantity}</td>
+            <td>${item.quantity || ""}</td>
             <td>${item.deal_status}</td>
             <td>${item.remark || ""}</td>
             <td>
@@ -463,18 +463,23 @@ document.addEventListener("DOMContentLoaded", function() {
     saleHistoryModal.style.display = "none";
   }
 
+  // 판매 완료 정보 추가 버튼 (판매 완료 정보 입력 모달 열기)
+  function openSaleDoneFormModal() {
+    saleDoneForm.reset();
+    currentSaleDoneOrderNum = null;
+    saleDoneModal.style.display = "block";
+  }
+  window.openSaleDoneFormModal = openSaleDoneFormModal;
+
   window.addEventListener("click", function(event) {
     if (event.target === saleHistoryModal) closeSaleHistoryModal();
     if (event.target === saleDoneModal) closeSaleDoneModal();
   });
 
-  window.onload = function() {
-    fetchTickets();
-  };
-
   // 전역 노출 (inline onclick에서 사용)
   window.openSaleHistoryModal = openSaleHistoryModal;
   window.closeSaleHistoryModal = closeSaleHistoryModal;
+  window.openSaleInfoModal = openSaleInfoModal; // Defined below
   window.openSaleInfoModalFromTicket = openSaleInfoModalFromTicket;
   window.openEditTicketModal = openEditTicketModal;
   window.openSaleDoneModalFromSaleInfo = openSaleDoneModalFromSaleInfo;
@@ -484,4 +489,77 @@ document.addEventListener("DOMContentLoaded", function() {
   window.closeEditTicketModal = closeEditTicketModal;
   window.closeSaleInfoModal = closeSaleInfoModal;
   window.closeSaleDoneModal = closeSaleDoneModal;
+
+  // 판매 등록 정보 모달 열기 (티켓 행의 "판매 등록 정보" 버튼)
+  async function openSaleInfoModal(reservationNumber) {
+    try {
+      const response = await fetch(`http://localhost:8000/sale_info?reservation_number=${reservationNumber}`);
+      if (!response.ok) throw new Error(`GET /sale_info failed: ${response.status}`);
+      const data = await response.json();
+      console.log("sale_info data:", data);
+      const saleInfoTableBody = document.getElementById("saleInfoTableBody");
+      saleInfoTableBody.innerHTML = "";
+      if (!data.sale_info || data.sale_info.length === 0) {
+        saleInfoTableBody.innerHTML = `<tr><td colspan="12">판매 등록 정보가 없습니다.</td></tr>`;
+      } else {
+        data.sale_info.forEach(item => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${item.reservation_number}</td>
+            <td>${item.prodnum}</td>
+            <td>${item.ticket_grade}</td>
+            <td>${item.ticket_floor}</td>
+            <td>${item.ticket_area}</td>
+            <td>${item.product_category}</td>
+            <td>${item.product_datetime}</td>
+            <td>${item.product_description}</td>
+            <td>${item.price}</td>
+            <td>${item.quantity || ""}</td>
+            <td>
+              <button onclick='openSaleHistoryModal("${item.prodnum}")'>판매 완료 정보</button>
+            </td>
+            <td>
+              <button onclick="deleteSaleInfo('${item.prodnum}')">삭제</button>
+            </td>
+          `;
+          saleInfoTableBody.appendChild(row);
+        });
+      }
+      saleInfoModal.style.display = "block";
+    } catch (error) {
+      console.error("Error fetching sale_info:", error);
+      alert("판매 등록 정보를 불러오는 중 오류가 발생했습니다.");
+    }
+  }
+
+  async function deleteSaleInfo(prodnum) {
+    if (confirm("해당 판매 등록 정보를 삭제하시겠습니까?")) {
+      try {
+        const response = await fetch(`http://localhost:8000/sale_info/${prodnum}`, { method: "DELETE" });
+        if (!response.ok) throw new Error("삭제 실패");
+        alert("판매 등록 정보가 삭제되었습니다!");
+        fetchTickets();
+      } catch (error) {
+        console.error("Error deleting sale info:", error);
+        alert("판매 등록 정보 삭제에 실패했습니다.");
+      }
+    }
+  }
+
+  function openSaleInfoModalFromTicket(ticket) {
+    saleInfoModal.style.display = "block";
+    saleInfoForm.elements["reservation_number"].value = ticket.reservation_number || "";
+    saleInfoForm.elements["ticket_grade"].value = "";
+    saleInfoForm.elements["ticket_floor"].value = "";
+    saleInfoForm.elements["ticket_area"].value = "";
+    saleInfoForm.elements["product_category"].value = "";
+    saleInfoForm.elements["product_datetime"].value = "";
+    saleInfoForm.elements["product_description"].value = "";
+    saleInfoForm.elements["price"].value = "";
+    saleInfoForm.elements["quantity"].value = "";
+    saleInfoForm.elements["prodnum"].value = "";
+  }
+
+  // 초기 로드
+  fetchTickets();
 });
