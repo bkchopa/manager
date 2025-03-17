@@ -142,6 +142,10 @@
     <div class="modal-content">
       <span class="close" onclick="closeSaleInfoFormModal()">×</span>
       <h2>판매 등록 정보 입력</h2>
+      <label>HTML 요소 붙여넣기:</label>
+      <textarea id="rawElementInputSaleInfo" rows="6" style="width:100%;" placeholder="여기에 HTML 요소를 붙여넣으세요"></textarea>
+      <button id="patchElementBtnSaleInfo">요소 패치</button>
+      <hr>
       <form id="saleInfoForm">
         <label>예매번호(티켓): <input type="text" name="reservation_number" readonly /></label><br>
         <label>티켓 등급: <input type="text" name="ticket_grade" required /></label><br>
