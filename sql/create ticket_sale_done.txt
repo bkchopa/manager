@@ -4,7 +4,8 @@ SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[ticket_sale_done](
-    [prodnum] NVARCHAR(50) NOT NULL,  -- 주문번호 (ticket_sale_info 테이블과 연결)
+    [prodnum] NVARCHAR(50) NOT NULL,  -- 제품번호 (ticket_sale_info 테이블과 연결)
+    [order_num] NVARCHAR(50) NOT NULL,  -- 주문번호 (고유 값)
     [order_date] DATETIME NOT NULL,              -- 주문일자
     [buyer_name] NVARCHAR(50) NOT NULL,            -- 구매자 이름
     [buyer_contact] NVARCHAR(50) NOT NULL,         -- 구매자 연락처
@@ -14,6 +15,6 @@ CREATE TABLE [dbo].[ticket_sale_done](
     [unit_price] INT NOT NULL,                     -- 단일 가격
     [deal_status] NVARCHAR(50) NOT NULL,           -- 거래 상태 (예: "판매완료", "판매중지" 등)
     [remark] NVARCHAR(MAX),           -- 비고란 	
-    CONSTRAINT [PK_ticket_sale_done] PRIMARY KEY CLUSTERED (prodnum ASC)
+    CONSTRAINT [PK_ticket_sale_done] PRIMARY KEY CLUSTERED (order_num ASC)
 ) ON [PRIMARY]
 GO
