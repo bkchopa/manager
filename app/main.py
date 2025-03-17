@@ -1,12 +1,13 @@
 import logging
 from fastapi import FastAPI, UploadFile, File, Form, Query
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from app.database import engine
 from fastapi import HTTPException
 from contextlib import asynccontextmanager
 import uvicorn
 import os
 from app.models import ticket_sale_info  # ticket_sale_info 테이블 임포트 (models.py에 정의되어 있어야 함)
+from app.models import ticket_sale_done
 import shutil
 from app.config import SEAT_IMAGE_FOLDER
 from fastapi.responses import FileResponse
@@ -325,6 +326,104 @@ def get_sale_info(reservation_number: str = Query(...)):
         return {"sale_info": sale_info_list}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/sale_done")
+async def register_sale_done(
+        prodnum: str = Form(...),
+        order_num: str = Form(...),
+        order_date: str = Form(...),
+        buyer_name: str = Form(...),
+        buyer_contact: str = Form(...),
+        product_category: str = Form(...),
+        product_description: str = Form(...),
+        product_datetime: str = Form(...),
+        unit_price: int = Form(...),
+        deal_status: str = Form(...),
+        remark: str = Form("")  # remark는 이제 nullable
+):
+    import datetime
+    try:
+        order_date_dt = datetime.datetime.fromisoformat(order_date)
+    except Exception as e:
+        order_date_dt = datetime.datetime.now()
+    try:
+        product_datetime_dt = datetime.datetime.fromisoformat(product_datetime)
+    except Exception as e:
+        product_datetime_dt = datetime.datetime.now()
+
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                ticket_sale_done.insert().values(
+                    prodnum=prodnum,
+                    order_num=order_num,
+                    order_date=order_date_dt,
+                    buyer_name=buyer_name,
+                    buyer_contact=buyer_contact,
+                    product_category=product_category,
+                    product_description=product_description,
+                    product_datetime=product_datetime_dt,
+                    unit_price=unit_price,
+                    deal_status=deal_status,
+                    remark=remark
+                )
+            )
+        logging.info("판매 완료 정보 저장 성공: 주문번호 %s", order_num)
+        return {"message": "판매 완료 정보가 등록되었습니다!"}
+    except Exception as e:
+        logging.error("판매 완료 등록 오류: %s", e)
+        raise HTTPException(status_code=500, detail="판매 완료 등록 실패")
+
+@app.delete("/sale_done/{prodnum}")
+def delete_sale_done(prodnum: str):
+    """
+    prodnum(주문번호)에 해당하는 판매 완료 정보를 삭제합니다.
+    """
+    try:
+        with engine.begin() as connection:
+            delete_query = delete(ticket_sale_done).where(ticket_sale_done.c.prodnum == prodnum)
+            result = connection.execute(delete_query)
+            if result.rowcount == 0:
+                raise HTTPException(status_code=404, detail="판매 완료 정보를 찾을 수 없습니다.")
+        return {"message": "판매 완료 정보가 삭제되었습니다!"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/sale_done/{order_num}")
+async def update_sale_done(order_num: str,
+                             buyer_name: str = Form(...),
+                             buyer_contact: str = Form(...),
+                             product_category: str = Form(...),
+                             product_description: str = Form(...),
+                             product_datetime: str = Form(...),
+                             unit_price: int = Form(...),
+                             deal_status: str = Form(...),
+                             remark: str = Form("")):
+    try:
+        product_datetime_dt = datetime.datetime.fromisoformat(product_datetime)
+    except Exception as e:
+        logging.error("product_datetime 변환 실패: %s", e)
+        product_datetime_dt = datetime.datetime.now()
+    try:
+        with engine.begin() as connection:
+            update_query = ticket_sale_done.update().where(ticket_sale_done.c.order_num == order_num).values(
+                buyer_name=buyer_name,
+                buyer_contact=buyer_contact,
+                product_category=product_category,
+                product_description=product_description,
+                product_datetime=product_datetime_dt,
+                unit_price=unit_price,
+                deal_status=deal_status,
+                remark=remark
+            )
+            result = connection.execute(update_query)
+            if result.rowcount == 0:
+                raise HTTPException(status_code=404, detail="판매 완료 정보를 찾을 수 없습니다.")
+        return {"message": "판매 완료 정보가 업데이트되었습니다!"}
+    except Exception as e:
+        logging.error("판매 완료 정보 업데이트 중 오류 발생: %s", e)
+        raise HTTPException(status_code=500, detail="판매 완료 정보 업데이트 실패")
 
 if __name__ == "__main__":
     logging.info("🔄 Uvicorn 서버 실행 중...")
