@@ -28,29 +28,50 @@ document.addEventListener("DOMContentLoaded", function() {
 
   // 전역 변수: 판매 완료 update 모드 여부
   let currentSaleDoneOrderNum = null;
+  let currentReservationNumber = "";
 
-  // -------------------------------
-  // 함수 선언부
-  // -------------------------------
+   // 전역 변수: 전체 티켓 데이터를 저장 및 정렬 순서 관리
+  let ticketDataList = [];
+  const sortOrders = {}; // 각 컬럼별 정렬 상태를 저장 (예: { reservation_number: 'asc', ... })
 
-  // 티켓 목록 불러오기
-  async function fetchTickets(refresh = false) {
-    try {
-      let url = "http://localhost:8000/tickets";
-      if (refresh) url += "?refresh=1";
-      console.log("Fetching tickets from:", url);
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
-      const data = await response.json();
-      console.log("Tickets received:", data);
+  // 날짜 및 숫자 등 타입에 따른 비교 함수
+  function compareValues(a, b, order, column) {
+    // 빈 값은 ""로 처리
+    a = (a !== undefined && a !== null) ? a : "";
+    b = (b !== undefined && b !== null) ? b : "";
+
+    // 날짜 컬럼 처리 (ISO 포맷인 경우)
+    if (column === "purchase_date" || column === "product_use_date") {
+      const dateA = new Date(a);
+      const dateB = new Date(b);
+      if (!isNaN(dateA) && !isNaN(dateB)) {
+        return order === 'asc' ? dateA - dateB : dateB - dateA;
+      }
+    }
+    // 숫자형 비교: 두 값 모두 숫자로 변환 가능한 경우
+    if (!isNaN(a) && !isNaN(b)) {
+      return order === 'asc' ? a - b : b - a;
+    }
+    // 기본: 문자열 비교 (대소문자 구분 없이)
+    const aStr = a.toString().toLowerCase();
+    const bStr = b.toString().toLowerCase();
+    return order === 'asc' ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr);
+  }
+
+  // 티켓 목록 렌더링 함수
+  function renderTickets(tickets) {
       const tableBody = document.getElementById("ticketTableBody");
       tableBody.innerHTML = "";
-      if (!data.tickets || data.tickets.length === 0) {
-        tableBody.innerHTML = "<tr><td colspan='15'>티켓 정보가 없습니다.</td></tr>";
+      if (!tickets || tickets.length === 0) {
+        tableBody.innerHTML = "<tr><td colspan='16'>티켓 정보가 없습니다.</td></tr>";
         return;
       }
-      data.tickets.forEach(ticket => {
+      tickets.forEach(ticket => {
         const row = document.createElement("tr");
+        // 만약 남은 티켓이 0이면 행 전체에 sold-out 클래스를 추가
+        if (ticket.remaining_quantity === 0) {
+          row.classList.add("sold-out");
+        }
         row.innerHTML = `
           <td>${ticket.reservation_number}</td>
           <td>${ticket.purchase_source}</td>
@@ -64,6 +85,7 @@ document.addEventListener("DOMContentLoaded", function() {
           <td>${ticket.product_use_date ? ticket.product_use_date.replace("T", " ") : ""}</td>
           <td>${ticket.product_name || ""}</td>
           <td>${ticket.purchase_quantity || ""}</td>
+          <td>${ticket.remaining_quantity || 0}</td>
           <td>${ticket.seat_detail}</td>
           <td>${
             ticket.seat_image_url
@@ -73,17 +95,54 @@ document.addEventListener("DOMContentLoaded", function() {
           <td>
             <button onclick='openEditTicketModal(${JSON.stringify(ticket)})'>수정</button>
             <button onclick="deleteTicket('${ticket.reservation_number}')">삭제</button>
-            <button onclick="openSaleInfoModal('${ticket.reservation_number}')">판매 등록 정보</button>
+            <button onclick='openSaleInfoModal(${JSON.stringify(ticket.reservation_number)})'>판매 등록 정보</button>
           </td>
         `;
         tableBody.appendChild(row);
       });
+    }
+
+
+
+   async function fetchTickets(refresh = false) {
+    try {
+      let url = "http://localhost:8000/tickets";
+      if (refresh) url += "?refresh=1";
+      console.log("Fetching tickets from:", url);
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+      const data = await response.json();
+      console.log("Tickets received:", data);
+      ticketDataList = data.tickets;
+      renderTickets(ticketDataList);
     } catch (error) {
       console.error("Error fetching tickets:", error);
       const tableBody = document.getElementById("ticketTableBody");
-      tableBody.innerHTML = "<tr><td colspan='15'>티켓 목록을 불러오는 중 오류가 발생했습니다.</td></tr>";
+      tableBody.innerHTML = "<tr><td colspan='16'>티켓 목록을 불러오는 중 오류가 발생했습니다.</td></tr>";
     }
   }
+
+  // 정렬 이벤트 리스너 추가: 모든 sortable th에 대해 처리
+    function addSortingEventListeners() {
+      const sortableHeaders = document.querySelectorAll("th.sortable");
+      sortableHeaders.forEach(header => {
+        header.style.cursor = "pointer";
+        header.addEventListener("click", function() {
+          const column = this.getAttribute("data-column");
+          // 정렬 순서 토글 (초기값은 asc)
+          sortOrders[column] = sortOrders[column] === 'asc' ? 'desc' : 'asc';
+          // 전체 티켓 데이터를 정렬 (ticketDataList는 전역 배열)
+          ticketDataList.sort((a, b) => compareValues(a[column], b[column], sortOrders[column], column));
+          // 필터 조건(검색, 판매가능 조건)도 적용해서 렌더링
+          applyFilters();
+        });
+      });
+    }
+  // -------------------------------
+  // 함수 선언부
+  // -------------------------------
+
+
 
   // 이미지 모달
   function openImageModal(imgSrc) {
@@ -141,22 +200,33 @@ document.addEventListener("DOMContentLoaded", function() {
     }
   });
 
-  // 티켓 수정 모달
-  function openEditTicketModal(ticket) {
-    editTicketModal.style.display = "block";
-    editTicketForm.elements["reservation_number"].value = ticket.reservation_number;
-    editTicketForm.elements["purchase_source"].value = ticket.purchase_source;
-    editTicketForm.elements["buyer"].value = ticket.buyer;
-    editTicketForm.elements["purchase_date"].value = ticket.purchase_date ? ticket.purchase_date.slice(0,16) : "";
-    editTicketForm.elements["payment_amount"].value = ticket.payment_amount;
-    editTicketForm.elements["payment_method"].value = ticket.payment_method || "";
-    editTicketForm.elements["card_company"].value = ticket.card_company || "";
-    editTicketForm.elements["card_number"].value = ticket.card_number || "";
-    editTicketForm.elements["card_approval_number"].value = ticket.card_approval_number || "";
-    editTicketForm.elements["seat_detail"].value = ticket.seat_detail;
-    editTicketForm.elements["ticket_count"].value = ticket.purchase_quantity;
-    document.getElementById("editPastedImagePreview").innerHTML = "";
-  }
+      // 티켓 수정 모달
+    function openEditTicketModal(ticket) {
+      editTicketModal.style.display = "block";
+      // 예약번호는 hidden 필드로 처리
+      editTicketForm.elements["reservation_number"].value = ticket.reservation_number;
+      editTicketForm.elements["purchase_source"].value = ticket.purchase_source;
+      editTicketForm.elements["buyer"].value = ticket.buyer;
+      // 구매일은 문자열 그대로 할당 (예: "2025.03.18")
+      editTicketForm.elements["purchase_date"].value = ticket.purchase_date || "";
+      editTicketForm.elements["payment_amount"].value = ticket.payment_amount;
+      editTicketForm.elements["payment_method"].value = ticket.payment_method || "";
+      editTicketForm.elements["card_company"].value = ticket.card_company || "";
+      editTicketForm.elements["card_number"].value = ticket.card_number || "";
+      editTicketForm.elements["card_approval_number"].value = ticket.card_approval_number || "";
+
+      // 새로 추가한 필드: 제품 사용일과 제품 이름 (텍스트 필드)
+      editTicketForm.elements["product_use_date"].value = ticket.product_use_date || "";
+      editTicketForm.elements["product_name"].value = ticket.product_name || "";
+
+      editTicketForm.elements["seat_detail"].value = ticket.seat_detail || "";
+      // 티켓 수와 남은 티켓은 그대로 채워넣음
+      editTicketForm.elements["ticket_count"].value = ticket.purchase_quantity || "";
+      editTicketForm.elements["remaining_quantity"].value = ticket.remaining_quantity || ticket.purchase_quantity;
+
+      document.getElementById("editPastedImagePreview").innerHTML = "";
+    }
+
   function closeEditTicketModal() {
     editTicketModal.style.display = "none";
     pastedEditImageFile = null;
@@ -200,62 +270,6 @@ document.addEventListener("DOMContentLoaded", function() {
     }
   });
 
-  // 판매 등록 정보 모달 처리 (ticket_sale_info 조회/목록)
-  async function openSaleInfoModal(reservationNumber) {
-    try {
-      const response = await fetch(`http://localhost:8000/sale_info?reservation_number=${reservationNumber}`);
-      if (!response.ok) throw new Error(`GET /sale_info failed: ${response.status}`);
-      const data = await response.json();
-      console.log("sale_info data:", data);
-      const saleInfoTableBody = document.getElementById("saleInfoTableBody");
-      saleInfoTableBody.innerHTML = "";
-      if (!data.sale_info || data.sale_info.length === 0) {
-        saleInfoTableBody.innerHTML = `<tr><td colspan="12">판매 등록 정보가 없습니다.</td></tr>`;
-      } else {
-        data.sale_info.forEach(item => {
-          const row = document.createElement("tr");
-          row.innerHTML = `
-            <td>${item.reservation_number}</td>
-            <td>${item.prodnum}</td>
-            <td>${item.ticket_grade}</td>
-            <td>${item.ticket_floor}</td>
-            <td>${item.ticket_area}</td>
-            <td>${item.product_category}</td>
-            <td>${item.product_datetime}</td>
-            <td>${item.product_description}</td>
-            <td>${item.price}</td>
-            <td>${item.quantity || ""}</td>
-            <td>
-              <button onclick='openSaleHistoryModal("${item.prodnum}")'>판매 완료 정보</button>
-            </td>
-            <td>
-              <button onclick="deleteSaleInfo('${item.prodnum}')">삭제</button>
-            </td>
-          `;
-          saleInfoTableBody.appendChild(row);
-        });
-      }
-      saleInfoModal.style.display = "block";
-    } catch (error) {
-      console.error("Error fetching sale_info:", error);
-      alert("판매 등록 정보를 불러오는 중 오류가 발생했습니다.");
-    }
-  }
-
-  async function deleteSaleInfo(prodnum) {
-    if (confirm("해당 판매 등록 정보를 삭제하시겠습니까?")) {
-      try {
-        const response = await fetch(`http://localhost:8000/sale_info/${prodnum}`, { method: "DELETE" });
-        if (!response.ok) throw new Error("삭제 실패");
-        alert("판매 등록 정보가 삭제되었습니다!");
-        fetchTickets();
-      } catch (error) {
-        console.error("Error deleting sale info:", error);
-        alert("판매 등록 정보 삭제에 실패했습니다.");
-      }
-    }
-  }
-
   function closeSaleInfoModal() {
     saleInfoModal.style.display = "none";
   }
@@ -276,163 +290,277 @@ document.addEventListener("DOMContentLoaded", function() {
   });
 
   // 판매 등록 정보 추가(신규) 모달 열기
-  function openSaleInfoForm() {
-    saleInfoForm.reset();
-    currentSaleDoneOrderNum = null;
-    saleInfoFormModal.style.display = "block";
-  }
+    function openSaleInfoForm() {
+      saleInfoForm.reset();
+      // 전역 변수에 저장된 예약번호를 재할당
+      saleInfoForm.elements["reservation_number"].value = currentReservationNumber;
+      currentSaleDoneOrderNum = null;
+      saleInfoFormModal.style.display = "block";
+    }
   function closeSaleInfoFormModal() {
     saleInfoFormModal.style.display = "none";
   }
   window.openSaleInfoForm = openSaleInfoForm;
   window.closeSaleInfoFormModal = closeSaleInfoFormModal;
 
-  // 판매 등록 정보 raw HTML 패치 (추가)
-  patchElementBtnSaleInfo.addEventListener("click", function() {
-    const rawHtml = rawElementInputSaleInfo.value;
-    if (!rawHtml) {
-      alert("먼저 HTML 요소값을 붙여넣으세요.");
-      return;
+
+    function extractSaleDoneData(htmlString) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlString, "text/html");
+
+      // 주문번호: <span class="prd-number"><span class="label">주문번호</span><p>202503161131125D7C</p></span>
+      const orderNumEl = doc.querySelector("span.prd-number p");
+      const order_num = orderNumEl ? orderNumEl.textContent.trim() : "";
+
+      // 상품번호: <div class="prd-number"><span class="label">상품번호</span><p>5578978446528</p></div>
+      const prodnumEl = doc.querySelector("div.prd-number p");
+      const prodnum = prodnumEl ? prodnumEl.textContent.trim() : "";
+
+      // 주문일자: 주문번호의 앞 8자리 ("20250316")를 "2025-03-16"로 변환
+      let order_date = "";
+      if (order_num.length >= 8) {
+        const datePart = order_num.slice(0, 8);
+        order_date = datePart.slice(0,4) + "-" + datePart.slice(4,6) + "-" + datePart.slice(6,8);
+      }
+
+      // 경기 일시 (product_datetime): <div class="prd-day"><span class="date">2025.03.16 13:00</span></div>
+      const datetimeEl = doc.querySelector("div.prd-day span.date");
+      let product_datetime = datetimeEl ? datetimeEl.textContent.trim() : "";
+      // (필요 시 날짜 포맷 변경 가능)
+
+      // 구매자 정보: 이름과 안심번호는 buyer 정보 영역에 있음
+      let buyer_name = "";
+      let buyer_contact = "";
+      const buyerDlEls = doc.querySelectorAll("div.item-area div.item dl");
+      buyerDlEls.forEach(dl => {
+        const dt = dl.querySelector("dt");
+        const dd = dl.querySelector("dd");
+        if (dt && dd) {
+          const label = dt.textContent.trim();
+          if (label === "이름") {
+            buyer_name = dd.textContent.trim();
+          } else if (label === "안심번호") {
+            buyer_contact = dd.textContent.trim();
+          }
+        }
+      });
+
+      // 상품 카테고리: <div class="prd-category"> 내부의 span들을 모두 합치기
+      const categoryEls = doc.querySelectorAll("div.prd-category span");
+      const product_category = Array.from(categoryEls)
+        .map(el => el.textContent.trim())
+        .filter(text => text.length > 0)
+        .join(" / ");
+
+      // 상품 상세 정보 (product_description): <div class="cont-my-file"> 내의 p 태그
+      const descEl = doc.querySelector("div.cont-my-file .text-defult p");
+      const product_description = descEl ? descEl.textContent.trim() : "";
+
+      // 단일 가격 (unit_price): <span class="price">20,000원<em>(60FP 적립)</em></span>
+      const priceEl = doc.querySelector("div.form-box span.price");
+      let unit_price = 0;
+      if (priceEl) {
+        // 첫 번째 텍스트 노드에 가격 정보가 있을 가능성이 높습니다.
+        let priceText = priceEl.childNodes[0] ? priceEl.childNodes[0].textContent.trim() : "";
+        priceText = priceText.replace(/[,원]/g, ""); // 콤마와 '원' 제거
+        unit_price = parseInt(priceText, 10) || 0;
+      }
+
+      // 거래 상태 (deal_status): 활성화된 단계 표시 (progress-step li.on)
+      const activeStepEl = doc.querySelector("div.progress-step li.on span");
+      const deal_status = activeStepEl ? activeStepEl.textContent.trim() : "판매완료";
+
+      // remark: 추가 정보가 없다면 빈 문자열로 처리
+      const remark = "";
+
+      return {
+        order_num,
+        prodnum,
+        order_date,
+        buyer_name,
+        buyer_contact,
+        product_category,
+        product_description,
+        product_datetime,
+        unit_price,
+        deal_status,
+        remark
+      };
     }
-    const parser = new DOMParser();
-    const wrappedHtml = `<table>${rawHtml}</table>`;
-    const doc = parser.parseFromString(wrappedHtml, "text/html");
-    const trElement = doc.querySelector("tr");
-    if (!trElement) {
-      alert("유효한 tr 요소가 없습니다.");
-      return;
-    }
-    // 예매번호는 이미 입력되어 있으므로 여기서는 추출하지 않습니다.
-    const ticket_grade = trElement.getAttribute("data-ticketgrade") || "";
-    const ticket_floor = trElement.getAttribute("data-ticketfloor") || "";
-    const ticket_area = trElement.getAttribute("data-ticketarea") || "";
-    let product_category = "";
-    const categoryTag = trElement.querySelector(".tbProductInfo em.bPath");
-    if (categoryTag) product_category = categoryTag.textContent.trim();
-    let product_description = "";
-    const descTag = trElement.querySelector(".tbProductInfo p");
-    if (descTag) product_description = descTag.textContent.trim();
-    let product_datetime = "";
-    const datetimeTag = trElement.querySelector(".tbProductInfo i");
-    if (datetimeTag) product_datetime = datetimeTag.textContent.trim();
-    let price = 0;
-    const priceEl = trElement.querySelector("span.bePrice01 em, span.bePrice02 em");
-    if (priceEl) price = parseInt(priceEl.textContent.replace(/,/g, ''));
-    let quantity = 0;
-    const quantityEl = trElement.querySelector("span.bePrice05");
-    if (quantityEl) {
-      const qtyMatch = quantityEl.textContent.match(/X(\d+)/);
-      if (qtyMatch) quantity = parseInt(qtyMatch[1]);
-    }
-    // 할당 (예매번호는 그대로 남겨두고, 나머지 필드만 업데이트)
-    saleInfoForm.elements["ticket_grade"].value = ticket_grade;
-    saleInfoForm.elements["ticket_floor"].value = ticket_floor;
-    saleInfoForm.elements["ticket_area"].value = ticket_area;
-    saleInfoForm.elements["product_category"].value = product_category;
-    saleInfoForm.elements["product_datetime"].value = product_datetime;
-    saleInfoForm.elements["product_description"].value = product_description;
-    saleInfoForm.elements["price"].value = price;
-    saleInfoForm.elements["quantity"].value = quantity;
-  });
+
 
   // 판매 완료 모달 처리 (ticket_sale_done 등록/수정)
   patchElementBtnDone.addEventListener("click", function() {
-    console.log("판매 완료 요소 패치 버튼 클릭됨");
-    const rawHtml = rawElementInputDone.value;
-    if (!rawHtml) {
-      alert("먼저 HTML 요소값을 붙여넣으세요.");
-      return;
-    }
-    const parser = new DOMParser();
-    const wrappedHtml = `<table>${rawHtml}</table>`;
-    const doc = parser.parseFromString(wrappedHtml, "text/html");
-    const trElement = doc.querySelector("tr");
-    if (!trElement) {
-      alert("유효한 tr 요소가 없습니다.");
-      return;
-    }
-    // 수정된 부분: data-ordnum은 주문번호(order_num)로 사용하고, productDetail 링크에서 추출한 값은 제품번호(prodnum)
-    const order_num = trElement.getAttribute("data-ordnum") || "";
-    let prodnum = "";
-    const productLink = trElement.querySelector(".tbProductInfo a");
-    if (productLink) {
-      const match = productLink.getAttribute("href").match(/productDetail\('(\d+)'\)/);
-      if (match) prodnum = match[1];
-    }
-    console.log("추출된 주문번호 (order_num):", order_num);
-    console.log("추출된 제품번호 (prodnum):", prodnum);
-    let order_date = "";
-    const orderInfoDiv = trElement.querySelector(".orderInfo");
-    if (orderInfoDiv) {
-      const emTag = orderInfoDiv.querySelector("em");
-      if (emTag) order_date = emTag.textContent.trim();
-    }
-    console.log("추출된 주문일자:", order_date);
-    let buyer_name = "";
-    let buyer_contact = "";
-    const pinLayer = trElement.querySelector(".pin_popup_layer2");
-    if (pinLayer) {
-      const nameDd = pinLayer.querySelector("dl:nth-of-type(1) dd");
-      buyer_name = nameDd ? nameDd.textContent.trim() : "";
-      const contactDd = pinLayer.querySelector("dl:nth-of-type(2) dd.txt_phone");
-      if (contactDd) {
-        const contactText = contactDd.textContent;
-        buyer_contact = contactText ? contactText.replace(/[^\d\-]/g, "").trim() : "";
+          const rawHtml = rawElementInputDone.value;
+          if (!rawHtml) {
+            alert("먼저 HTML 요소값을 붙여넣으세요.");
+            return;
+          }
+
+          // 기존의 patchElementBtnDone 로직 삭제
+          // 대신 새 함수 호출
+          const saleDoneData = extractSaleDoneData(rawHtml);
+
+          // 추출된 데이터를 판매 완료 폼에 채워줍니다.
+          saleDoneForm.elements["order_num"].value = saleDoneData.order_num;
+          saleDoneForm.elements["prodnum"].value = saleDoneData.prodnum;
+          saleDoneForm.elements["order_date"].value = saleDoneData.order_date;
+          saleDoneForm.elements["buyer_name"].value = saleDoneData.buyer_name;
+          saleDoneForm.elements["buyer_contact"].value = saleDoneData.buyer_contact;
+          saleDoneForm.elements["product_category"].value = saleDoneData.product_category;
+          saleDoneForm.elements["product_description"].value = saleDoneData.product_description;
+          saleDoneForm.elements["product_datetime"].value = saleDoneData.product_datetime;
+          saleDoneForm.elements["unit_price"].value = saleDoneData.unit_price;
+          saleDoneForm.elements["deal_status"].value = saleDoneData.deal_status;
+          saleDoneForm.elements["remark"].value = saleDoneData.remark;
+        });
+
+
+  function extractSaleInfoData(htmlString, reservation_number) {
+      const parser = new DOMParser();
+      // raw HTML이 단일 <tr>라면 <table>으로 감싸서 파싱
+      const wrappedHtml = `<table>${htmlString}</table>`;
+      const doc = parser.parseFromString(wrappedHtml, "text/html");
+
+      console.log("---- extractSaleInfoData 시작 ----");
+      console.log("reservation_number (외부):", reservation_number);
+
+      // 상품번호: td.td-check-prd 영역의 <a> 태그에서 추출 ("5589124868887")
+      const prodnumEl = doc.querySelector("td.td-check-prd a");
+      const prodnum = prodnumEl ? prodnumEl.textContent.trim() : "";
+      console.log("prodnum:", prodnum);
+
+      // 티켓 등급: div.prd-title.type-sm의 첫 번째 span ("지정석 S")
+      const ticketGradeEl = doc.querySelector("div.prd-title.type-sm span");
+      const ticket_grade = ticketGradeEl ? ticketGradeEl.textContent.trim() : "";
+      console.log("ticket_grade:", ticket_grade);
+
+      // 티켓 위치와 티켓 구역: div.prd-title.type-md의 첫 두 개 span ("G구역", "17열")
+      const prdTitleMdEls = doc.querySelectorAll("div.prd-title.type-md span");
+      let ticket_floor = "", ticket_area = "";
+      if (prdTitleMdEls.length >= 2) {
+        ticket_floor = prdTitleMdEls[0].textContent.trim();
+        ticket_area = prdTitleMdEls[1].textContent.trim();
       }
+      console.log("ticket_floor:", ticket_floor);
+      console.log("ticket_area:", ticket_area);
+
+      // 상품 카테고리: div.prd-category 내의 모든 span을 " / "로 연결
+      const categoryEls = doc.querySelectorAll("div.prd-category span");
+      const product_category = Array.from(categoryEls)
+        .map(el => el.textContent.trim())
+        .join(" / ");
+      console.log("product_category:", product_category);
+
+      // 공연(상품) 일시: div.prd-day 내의 span.date ("2025.04.19 18:00")
+      const datetimeEl = doc.querySelector("div.prd-day span.date");
+      const product_datetime = datetimeEl ? datetimeEl.textContent.trim() : "";
+      console.log("product_datetime:", product_datetime);
+
+      // 상품 설명: div.prd-title.type-md와 div.prd-title.type-sm의 텍스트를 합침
+      const prdTitleMdText = Array.from(doc.querySelectorAll("div.prd-title.type-md span"))
+        .map(el => el.textContent.trim())
+        .join(" ");
+      const prdTitleSmText = Array.from(doc.querySelectorAll("div.prd-title.type-sm span"))
+        .map(el => el.textContent.trim())
+        .join(" ");
+      const product_description = (prdTitleMdText + " " + prdTitleSmText).trim();
+      console.log("product_description:", product_description);
+
+      // 가격: td.td-full 내의 p.my-text-md.align-rt에서 추출 ("420,000원")
+      let price = 0;
+      const priceP = doc.querySelector("td.td-full p.my-text-md.align-rt");
+      if (priceP) {
+        let priceText = priceP.textContent.trim();
+        console.log("원래 priceText:", priceText);
+        // 콤마, 공백, '원' 제거 → "420000"
+        priceText = priceText.replace(/[,원\s]/g, "");
+        console.log("정제된 priceText:", priceText);
+        price = parseInt(priceText, 10) || 0;
+      }
+      console.log("price:", price);
+
+      // 수량: td.td-full 내의 p.my-text-xs.align-lt의 세 번째 span에서 추출 ("2매")
+      let quantity = 1;
+      const qtySpans = doc.querySelectorAll("td.td-full p.my-text-xs.align-lt span");
+      if (qtySpans.length >= 3) {
+        let qtyText = qtySpans[2].textContent.trim();
+        console.log("원래 qtyText:", qtyText);
+        qtyText = qtyText.replace(/[^\d]/g, ""); // 숫자만 남김 → "2"
+        console.log("정제된 qtyText:", qtyText);
+        quantity = parseInt(qtyText, 10) || 1;
+      }
+      console.log("quantity:", quantity);
+      console.log("---- extractSaleInfoData 종료 ----");
+
+      return {
+        reservation_number, // 외부에서 받은 값 (예: "test1234")
+        prodnum,
+        ticket_grade,
+        ticket_floor,
+        ticket_area,
+        product_category,
+        product_datetime,
+        product_description,
+        price,
+        quantity
+      };
     }
-    console.log("추출된 구매자 이름:", buyer_name);
-    console.log("추출된 구매자 연락처:", buyer_contact);
-    let product_category = "";
-    const categoryTag = trElement.querySelector(".tbProductInfo em.bPath");
-    if (categoryTag) product_category = categoryTag.textContent.trim();
-    console.log("추출된 상품 카테고리:", product_category);
-    let product_description = "";
-    const descTag = trElement.querySelector(".tbProductInfo p");
-    if (descTag) product_description = descTag.textContent.trim();
-    console.log("추출된 상품 설명:", product_description);
-    let product_datetime = "";
-    const datetimeTag = trElement.querySelector(".tbProductInfo i");
-    if (datetimeTag) product_datetime = datetimeTag.textContent.trim();
-    console.log("추출된 상품 일시:", product_datetime);
-    let unit_price = 0;
-    const priceEl = trElement.querySelector("span.bePrice02 em");
-    if (priceEl) unit_price = parseInt(priceEl.textContent.replace(/,/g, ''));
-    console.log("추출된 단일 가격:", unit_price);
-    const deal_status = "판매완료";
-    const remark = "";
 
-    saleDoneForm.elements["order_num"].value = order_num;
-    saleDoneForm.elements["prodnum"].value = prodnum;
-    saleDoneForm.elements["order_date"].value = order_date;
-    saleDoneForm.elements["buyer_name"].value = buyer_name;
-    saleDoneForm.elements["buyer_contact"].value = buyer_contact;
-    saleDoneForm.elements["product_category"].value = product_category;
-    saleDoneForm.elements["product_description"].value = product_description;
-    saleDoneForm.elements["product_datetime"].value = product_datetime;
-    saleDoneForm.elements["unit_price"].value = unit_price;
-    saleDoneForm.elements["deal_status"].value = deal_status;
-    saleDoneForm.elements["remark"].value = remark;
 
-    currentSaleDoneOrderNum = null;
-  });
+
+
+
+
+
+    patchElementBtnSaleInfo.addEventListener("click", function() {
+      const rawHtml = rawElementInputSaleInfo.value;
+      if (!rawHtml) {
+        alert("먼저 HTML 요소값을 붙여넣으세요.");
+        return;
+      }
+      // 폼에 이미 채워진 예약번호를 사용합니다.
+      const reservation_number = saleInfoForm.elements["reservation_number"].value;
+      const saleInfoData = extractSaleInfoData(rawHtml, reservation_number);
+      console.log("추출된 saleInfoData:", saleInfoData);
+
+      // 추출된 데이터를 각 폼 필드에 할당
+      saleInfoForm.elements["prodnum"].value = saleInfoData.prodnum;
+      saleInfoForm.elements["ticket_grade"].value = saleInfoData.ticket_grade;
+      saleInfoForm.elements["ticket_floor"].value = saleInfoData.ticket_floor;
+      saleInfoForm.elements["ticket_area"].value = saleInfoData.ticket_area;
+      saleInfoForm.elements["product_category"].value = saleInfoData.product_category;
+      saleInfoForm.elements["product_datetime"].value = saleInfoData.product_datetime;
+      saleInfoForm.elements["product_description"].value = saleInfoData.product_description;
+      saleInfoForm.elements["price"].value = saleInfoData.price;
+      saleInfoForm.elements["quantity"].value = saleInfoData.quantity;
+    });
+
+
+
+
+
 
   function openSaleDoneModalFromSaleInfo(saleInfoRecord) {
-    closeSaleHistoryModal();
-    saleDoneModal.style.display = "block";
-    saleDoneForm.elements["prodnum"].value = saleInfoRecord.prodnum;
-    saleDoneForm.elements["order_num"].value = saleInfoRecord.order_num || "";
-    saleDoneForm.elements["order_date"].value = new Date().toISOString();
-    saleDoneForm.elements["buyer_name"].value = "";
-    saleDoneForm.elements["buyer_contact"].value = "";
-    saleDoneForm.elements["product_category"].value = saleInfoRecord.product_category;
-    saleDoneForm.elements["product_description"].value = saleInfoRecord.product_description;
-    saleDoneForm.elements["product_datetime"].value = saleInfoRecord.product_datetime;
-    saleDoneForm.elements["unit_price"].value = saleInfoRecord.price;
-    saleDoneForm.elements["deal_status"].value = "판매완료";
-    saleDoneForm.elements["remark"].value = "";
+      closeSaleHistoryModal();
+      saleDoneModal.style.display = "block";
 
-    currentSaleDoneOrderNum = saleInfoRecord.order_num || null;
-  }
+      // 기존 데이터로 모든 필드를 채워줍니다.
+      saleDoneForm.elements["prodnum"].value = saleInfoRecord.prodnum || "";
+      saleDoneForm.elements["order_num"].value = saleInfoRecord.order_num || "";
+      saleDoneForm.elements["order_date"].value = saleInfoRecord.order_date || "";
+      saleDoneForm.elements["buyer_name"].value = saleInfoRecord.buyer_name || "";
+      saleDoneForm.elements["buyer_contact"].value = saleInfoRecord.buyer_contact || "";
+      saleDoneForm.elements["product_category"].value = saleInfoRecord.product_category || "";
+      saleDoneForm.elements["product_description"].value = saleInfoRecord.product_description || "";
+      saleDoneForm.elements["product_datetime"].value = saleInfoRecord.product_datetime || "";
+      saleDoneForm.elements["unit_price"].value = saleInfoRecord.unit_price || "";
+      saleDoneForm.elements["deal_status"].value = saleInfoRecord.deal_status || "";
+      saleDoneForm.elements["remark"].value = saleInfoRecord.remark || "";
+
+      // 현재 수정 대상 주문번호를 저장 (업데이트 시 사용)
+      currentSaleDoneOrderNum = saleInfoRecord.order_num || null;
+    }
 
   saleDoneForm.addEventListener("submit", async function(event) {
     event.preventDefault();
@@ -472,107 +600,324 @@ document.addEventListener("DOMContentLoaded", function() {
   }
 
   async function openSaleHistoryModal(prodnum) {
-    console.log("openSaleHistoryModal - prodnum:", prodnum);
-    try {
-      const response = await fetch(`http://localhost:8000/sale_done_list?prodnum=${prodnum}`);
-      if (!response.ok) throw new Error(`GET /sale_done_list failed: ${response.status}`);
-      const data = await response.json();
-      console.log("sale_done data:", data);
-      const saleHistoryBody = document.getElementById("saleHistoryBody");
-      saleHistoryBody.innerHTML = "";
-      if (!data.sale_done || data.sale_done.length === 0) {
-        saleHistoryBody.innerHTML = `<tr><td colspan="14">판매 완료 정보가 없습니다.</td></tr>`;
-      } else {
-        data.sale_done.forEach(item => {
-          const row = document.createElement("tr");
-          row.innerHTML = `
-            <td>${item.reservation_number || ""}</td>
-            <td>${item.prodnum}</td>
-            <td>${item.order_num}</td>
-            <td>${item.ticket_grade}</td>
-            <td>${item.ticket_floor}</td>
-            <td>${item.ticket_area}</td>
-            <td>${item.product_category}</td>
-            <td>${item.product_datetime}</td>
-            <td>${item.product_description}</td>
-            <td>${item.unit_price}</td>
-            <td>${item.quantity || ""}</td>
-            <td>${item.deal_status}</td>
-            <td>${item.remark || ""}</td>
-            <td>
-              <button onclick='openSaleDoneModalFromSaleInfo(${JSON.stringify(item)})'>수정/판매 완료 처리</button>
-              <button onclick="deleteSaleDone('${item.order_num}')">판매 완료 취소</button>
-            </td>
-          `;
-          saleHistoryBody.appendChild(row);
-        });
+      console.log("openSaleHistoryModal - prodnum:", prodnum);
+      try {
+        // 1) 기존에 판매 등록 모달을 닫는 코드를 제거
+        // saleInfoModal.style.display = "none";  // 제거!
+
+        // 2) saleHistoryModal을 열 때 z-index가 더 높도록 설정
+        saleHistoryModal.style.zIndex = "3000";
+        saleHistoryModal.style.display = "block";
+
+        const response = await fetch(`http://localhost:8000/sale_done_list?prodnum=${prodnum}`);
+        if (!response.ok) throw new Error(`GET /sale_done_list failed: ${response.status}`);
+        const data = await response.json();
+        console.log("sale_done data:", data);
+
+        const saleHistoryBody = document.getElementById("saleHistoryBody");
+        saleHistoryBody.innerHTML = "";
+        if (!data.sale_done || data.sale_done.length === 0) {
+          saleHistoryBody.innerHTML = `<tr><td colspan="14">판매 완료 정보가 없습니다.</td></tr>`;
+        } else {
+          data.sale_done.forEach(item => {
+            const row = document.createElement("tr");
+            row.innerHTML = `
+              <td>${item.reservation_number || ""}</td>
+              <td>${item.prodnum}</td>
+              <td>${item.order_num}</td>
+              <td>${item.order_date || ""}</td>         <!-- 주문일자 -->
+              <td>${item.buyer_name || ""}</td>         <!-- 구매자 이름 -->
+              <td>${item.buyer_contact || ""}</td>      <!-- 구매자 연락처 -->
+              <td>${item.ticket_grade || ""}</td>
+              <td>${item.ticket_floor || ""}</td>
+              <td>${item.ticket_area || ""}</td>
+              <td>${item.product_category || ""}</td>
+              <td>${item.product_datetime || ""}</td>
+              <td>${item.product_description || ""}</td>
+              <td>${item.unit_price || ""}</td>
+              <td>${item.quantity || ""}</td>
+              <td>${item.deal_status || ""}</td>
+              <td>${item.remark || ""}</td>
+              <td>
+                <button onclick='openSaleDoneModalFromSaleInfo(${JSON.stringify(item)})'>수정/판매 완료 처리</button>
+                <button onclick="deleteSaleDone('${item.order_num}')">판매 완료 취소</button>
+              </td>
+            `;
+            saleHistoryBody.appendChild(row);
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching sale_done info:", error);
+        alert("판매 완료 정보를 불러오는 중 오류가 발생했습니다.");
       }
-      saleHistoryModal.style.display = "block";
-    } catch (error) {
-      console.error("Error fetching sale_done info:", error);
-      alert("판매 완료 정보를 불러오는 중 오류가 발생했습니다.");
     }
-  }
+
+
 
   function closeSaleHistoryModal() {
     saleHistoryModal.style.display = "none";
   }
 
-  // 판매 등록 정보 모달 열기 (티켓 행의 "판매 등록 정보" 버튼)
-  async function openSaleInfoModal(reservationNumber) {
-    try {
-      const response = await fetch(`http://localhost:8000/sale_info?reservation_number=${reservationNumber}`);
-      if (!response.ok) throw new Error(`GET /sale_info failed: ${response.status}`);
-      const data = await response.json();
-      console.log("sale_info data:", data);
-      const saleInfoTableBody = document.getElementById("saleInfoTableBody");
-      saleInfoTableBody.innerHTML = "";
-      if (!data.sale_info || data.sale_info.length === 0) {
-        saleInfoTableBody.innerHTML = `<tr><td colspan="12">판매 등록 정보가 없습니다.</td></tr>`;
-      } else {
-        data.sale_info.forEach(item => {
-          const row = document.createElement("tr");
-          row.innerHTML = `
-            <td>${item.reservation_number}</td>
-            <td>${item.prodnum}</td>
-            <td>${item.ticket_grade}</td>
-            <td>${item.ticket_floor}</td>
-            <td>${item.ticket_area}</td>
-            <td>${item.product_category}</td>
-            <td>${item.product_datetime}</td>
-            <td>${item.product_description}</td>
-            <td>${item.price}</td>
-            <td>${item.quantity || ""}</td>
-            <td>
-              <button onclick='openSaleHistoryModal("${item.prodnum}")'>판매 완료 정보</button>
-            </td>
-            <td>
-              <button onclick="deleteSaleInfo('${item.prodnum}')">삭제</button>
-            </td>
-          `;
-          saleInfoTableBody.appendChild(row);
-        });
+    // 전역 변수: 현재 선택된 예약번호
+
+
+    async function openSaleInfoModal(reservationNumber) {
+      try {
+        // 예약번호를 폼에 채워두고 전역 변수에 저장
+        saleInfoForm.elements["reservation_number"].value = reservationNumber;
+        currentReservationNumber = reservationNumber;
+        console.log("openSaleInfoModal 호출됨, 전달된 reservationNumber:", reservationNumber);
+        console.log("currentReservationNumber에 저장된 값:", currentReservationNumber);
+
+        // sale_info 불러오기
+        const response = await fetch(`http://localhost:8000/sale_info?reservation_number=${reservationNumber}`);
+        if (!response.ok) throw new Error(`GET /sale_info failed: ${response.status}`);
+        const data = await response.json();
+
+        // sale_done 목록도 예약번호 기준으로 불러옵니다.
+        const responseDone = await fetch(`http://localhost:8000/sale_done_list?reservation_number=${reservationNumber}`);
+        let soldProdnums = new Set();
+        if (responseDone.ok) {
+          const dataDone = await responseDone.json();
+          // dataDone.sale_done가 있을 때, prodnum을 Set으로 만듭니다.
+          if (dataDone.sale_done && dataDone.sale_done.length > 0) {
+            soldProdnums = new Set(dataDone.sale_done.map(item => item.prodnum));
+          }
+        } else {
+          console.error(`GET /sale_done_list failed: ${responseDone.status}`);
+        }
+
+        const saleInfoTableBody = document.getElementById("saleInfoTableBody");
+        saleInfoTableBody.innerHTML = "";
+
+        if (!data.sale_info || data.sale_info.length === 0) {
+          saleInfoTableBody.innerHTML = `<tr><td colspan="12">판매 등록 정보가 없습니다.</td></tr>`;
+        } else {
+          data.sale_info.forEach(item => {
+            // 판매 완료 정보가 존재하면, 해당 prodnum이 soldProdnums에 있음
+            const rowClass = soldProdnums.has(item.prodnum) ? "sold" : "";
+            const row = document.createElement("tr");
+            row.className = rowClass; // sold 클래스가 추가되면 CSS에서 초록색 배경 처리됨.
+            row.innerHTML = `
+              <td>${item.reservation_number}</td>
+              <td>${item.prodnum}</td>
+              <td>${item.ticket_grade}</td>
+              <td>${item.ticket_floor}</td>
+              <td>${item.ticket_area}</td>
+              <td>${item.product_category}</td>
+              <td>${item.product_datetime}</td>
+              <td>${item.product_description}</td>
+              <td>${item.price}</td>
+              <td>${item.quantity || ""}</td>
+              <td>
+                <button onclick='openSaleHistoryModal(${JSON.stringify(item.prodnum)})'>판매 완료 정보</button>
+              </td>
+              <td>
+                <button onclick='deleteSaleInfo(${JSON.stringify(item.prodnum)})'>삭제</button>
+              </td>
+            `;
+            saleInfoTableBody.appendChild(row);
+          });
+        }
+        saleInfoModal.style.display = "block";
+      } catch (error) {
+        console.error("Error fetching sale_info:", error);
+        alert("판매 등록 정보를 불러오는 중 오류가 발생했습니다.");
       }
-      saleInfoModal.style.display = "block";
-    } catch (error) {
-      console.error("Error fetching sale_info:", error);
-      alert("판매 등록 정보를 불러오는 중 오류가 발생했습니다.");
     }
-  }
+
+
 
   async function deleteSaleInfo(prodnum) {
-    if (confirm("해당 판매 등록 정보를 삭제하시겠습니까?")) {
-      try {
-        const response = await fetch(`http://localhost:8000/sale_info/${prodnum}`, { method: "DELETE" });
-        if (!response.ok) throw new Error("삭제 실패");
-        alert("판매 등록 정보가 삭제되었습니다!");
-        fetchTickets();
-      } catch (error) {
-        console.error("Error deleting sale info:", error);
-        alert("판매 등록 정보 삭제에 실패했습니다.");
+      if (confirm("해당 판매 등록 정보를 삭제하시겠습니까?")) {
+        try {
+          const response = await fetch(`http://localhost:8000/sale_info/${prodnum}`, { method: "DELETE" });
+          if (!response.ok) throw new Error("삭제 실패");
+          alert("판매 등록 정보가 삭제되었습니다!");
+          fetchTickets();  // 또는 필요한 경우, 관련 모달도 새로고침
+        } catch (error) {
+          console.error("Error deleting sale info:", error);
+          alert("판매 등록 정보 삭제에 실패했습니다.");
+        }
       }
     }
-  }
+
+      // 티켓링크(제휴) 사이트의 HTML에서 티켓 등록에 필요한 데이터를 추출하는 함수
+    function extractTicketLinkData(htmlString) {
+     const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlString, "text/html");
+      const ticketData = {};
+
+      // 예매정보 테이블에서 데이터 추출
+      const reserveInfoTable = doc.querySelector(".bx_table.tbl_reserve_info table");
+      if (reserveInfoTable) {
+        const rows = reserveInfoTable.querySelectorAll("tbody tr");
+        rows.forEach(row => {
+          const ths = row.querySelectorAll("th");
+          const tds = row.querySelectorAll("td");
+          ths.forEach((th, idx) => {
+            const headerText = th.textContent.trim();
+            if (headerText === "티켓명") {
+              // <dl class="bx_league"> 내부의 <dd>들을 조합
+              const td = tds[idx];
+              const dl = td.querySelector("dl.bx_league");
+              if (dl) {
+                const ddElements = dl.querySelectorAll("dd");
+                const parts = [];
+                ddElements.forEach(dd => {
+                  const text = dd.textContent.replace(/<br\s*\/?>/gi, "").trim();
+                  if (text) {
+                    parts.push(text);
+                  }
+                });
+                ticketData.product_name = parts.join(" / ");
+              } else {
+                // <dl>이 없으면 td의 텍스트 사용
+                ticketData.product_name = td.textContent.trim();
+              }
+            } else if (headerText === "예매자") {
+              ticketData.buyer = tds[idx].textContent.trim();
+            } else if (headerText === "관람일시") {
+              ticketData.product_use_date = tds[idx].textContent.trim();
+            } else if (headerText === "예매일") {
+              ticketData.purchase_date = tds[idx].textContent.trim();
+            } else if (headerText === "예매채널") {
+              ticketData.purchase_source = tds[idx].textContent.trim();
+            }
+          });
+        });
+      }
+
+      // 2. 결제정보 테이블에서 총 결제금액과 결제 방식 추출
+      const paymentInfoTable = doc.querySelector(".bx_table.tbl_payment_info table");
+      if (paymentInfoTable) {
+        // 총 결제금액
+        const tfoot = paymentInfoTable.querySelector("tfoot");
+        if (tfoot) {
+          const rows = tfoot.querySelectorAll("tr");
+          rows.forEach(row => {
+            const th = row.querySelector("th");
+            if (th && th.textContent.trim() === "총 결제금액") {
+              const span = row.querySelector("span.color_point");
+              if (span) {
+                let amountText = span.textContent.trim();
+                amountText = amountText.replace(/[,원\s]/g, "");
+                ticketData.payment_amount = parseInt(amountText, 10);
+              }
+            }
+          });
+        }
+        // 결제 방식 추출: 결제정보 테이블의 tfoot 내 ul > li (예: "신용카드 84,000원")
+        const li = paymentInfoTable.querySelector("tfoot ul li");
+        if (li) {
+          const text = li.textContent.trim();
+          // 결제 방식은 숫자 나오기 전까지의 텍스트
+          const match = text.match(/^[^\d]+/);
+          if (match) {
+            ticketData.payment_method = match[0].trim();
+          } else {
+            ticketData.payment_method = "";
+          }
+        }
+      }
+        const seatInfoTable = doc.querySelector(".bx_table.tbl_seat_info table");
+        let seatDetails = [];
+        let ticketCount = 0;
+        let reservationNumber = "";
+        if (seatInfoTable) {
+          const rows = seatInfoTable.querySelectorAll("tbody tr");
+          ticketCount = rows.length;
+          rows.forEach(row => {
+            const cells = row.querySelectorAll("td");
+            if (cells.length >= 5) {
+              if (!reservationNumber) {
+                reservationNumber = cells[1].textContent.trim();
+              }
+              const seatText = cells[4].textContent.trim();
+              if (seatText) {
+                seatDetails.push(seatText);
+              }
+            }
+          });
+        }
+        // 만약 티켓 수가 0이면 기본값으로 1을 사용 (원하는 기본값으로 수정 가능)
+        if (!ticketCount || ticketCount === 0) {
+          ticketCount = 1;
+        }
+
+        ticketData.reservation_number = reservationNumber;
+        ticketData.purchase_quantity = ticketCount;
+        ticketData.remaining_quantity = ticketCount; // 남은 티켓 수를 티켓 수와 동일하게 설정
+        ticketData.seat_detail = seatDetails.join(", ");
+      // 3. 좌석정보 테이블에서 티켓 수, 예매번호, 좌석 상세 추출
+
+
+      return ticketData;
+    }
+
+    document.getElementById("patchElementBtnTicket").addEventListener("click", function() {
+      const rawHtml = document.getElementById("rawElementInputTicket").value;
+      if (!rawHtml) {
+        alert("먼저 HTML 요소를 붙여넣으세요.");
+        return;
+      }
+      const ticketData = extractTicketLinkData(rawHtml);
+      console.log("추출된 티켓 데이터:", ticketData);
+
+      const form = document.getElementById("addTicketForm");
+      form.elements["reservation_number"].value = ticketData.reservation_number || "";
+      form.elements["purchase_source"].value = ticketData.purchase_source || "";
+      form.elements["buyer"].value = ticketData.buyer || "";
+      form.elements["purchase_date"].value = ticketData.purchase_date || "";
+      form.elements["payment_amount"].value = ticketData.payment_amount || "";
+      form.elements["payment_method"].value = ticketData.payment_method || "";
+      form.elements["product_use_date"].value = ticketData.product_use_date || "";
+      // 여기서 제품 이름를 채워 넣습니다.
+      form.elements["product_name"].value = ticketData.product_name || "";
+      form.elements["ticket_count"].value = ticketData.purchase_quantity || "";
+      form.elements["remaining_quantity"].value = ticketData.remaining_quantity || "";
+      form.elements["seat_detail"].value = ticketData.seat_detail || "";
+    });
+
+
+    async function deleteTicket(reservation_number) {
+      if (confirm("해당 티켓과 관련된 판매 등록 정보 및 판매 완료 정보까지 모두 삭제하시겠습니까?")) {
+        try {
+          // 1. 해당 티켓의 판매 등록 정보 조회
+          let saleInfoResponse = await fetch(`http://localhost:8000/sale_info?reservation_number=${reservation_number}`);
+          if (!saleInfoResponse.ok) {
+            throw new Error("판매 등록 정보 조회에 실패했습니다.");
+          }
+          let saleInfoData = await saleInfoResponse.json();
+
+          // 2. 조회된 판매 등록 정보가 있으면, 각 prodnum에 대해 DELETE 요청 실행
+          if (saleInfoData.sale_info && saleInfoData.sale_info.length > 0) {
+            for (const info of saleInfoData.sale_info) {
+              let deleteSaleInfoResponse = await fetch(`http://localhost:8000/sale_info/${info.prodnum}`, {
+                method: "DELETE"
+              });
+              if (!deleteSaleInfoResponse.ok) {
+                throw new Error(`판매 등록 정보 삭제 실패: prodnum ${info.prodnum}`);
+              }
+            }
+          }
+
+          // 3. 티켓 삭제
+          const response = await fetch(`http://localhost:8000/tickets/${reservation_number}`, {
+            method: "DELETE"
+          });
+          if (!response.ok) {
+            throw new Error("티켓 삭제 실패");
+          }
+          alert("티켓과 관련된 판매 등록 및 판매 완료 정보가 모두 삭제되었습니다!");
+          fetchTickets();
+        } catch (error) {
+          console.error("Error deleting ticket and related info:", error);
+          alert("티켓 삭제에 실패했습니다.");
+        }
+      }
+    }
+
 
   function openSaleInfoModalFromTicket(ticket) {
     saleInfoModal.style.display = "block";
@@ -588,6 +933,85 @@ document.addEventListener("DOMContentLoaded", function() {
     saleInfoForm.elements["prodnum"].value = "";
   }
 
+   function openSaleDoneFormModal() {
+      // 폼 초기화 (필요한 경우 reset() 사용)
+      saleDoneForm.reset();
+      currentSaleDoneOrderNum = null;
+      saleDoneModal.style.zIndex = "4000";  // 최상단에 오도록 강제 지정
+      saleDoneModal.style.display = "block";
+    }
+
+    function applyFilters() {
+      const searchText = document.getElementById("seatSearch").value.trim().toLowerCase();
+      const availableOnly = document.getElementById("availableOnly").checked;
+      let filtered = ticketDataList;
+
+      // 좌석 상세 검색 필터 적용
+      if (searchText) {
+        filtered = filtered.filter(ticket =>
+          ticket.seat_detail && ticket.seat_detail.toLowerCase().includes(searchText)
+        );
+      }
+
+      // 판매 가능한 상품만 보기: 제품 사용일이 현재 시간보다 미래인 티켓만 필터링
+      if (availableOnly) {
+        const now = new Date();
+        filtered = filtered.filter(ticket => {
+          if (!ticket.product_use_date) return false;
+          // 만약 product_use_date에 "T"가 없으면, 공백을 "T"로 교체 (예: "2025-03-26 18:30:00" → "2025-03-26T18:30:00")
+          let dateStr = ticket.product_use_date;
+          if (dateStr.indexOf("T") === -1) {
+            dateStr = dateStr.replace(" ", "T");
+          }
+          const useDate = new Date(dateStr);
+          return useDate > now;
+        });
+      }
+
+      renderTickets(filtered);
+    }
+
+    // 기존 검색창 이벤트를 위 applyFilters 함수로 대체
+    document.getElementById("seatSearch").addEventListener("input", applyFilters);
+    // 체크박스 상태 변화 시에도 필터 적용
+    document.getElementById("availableOnly").addEventListener("change", applyFilters);
+
+    // fetchTickets 함수에서 데이터를 받아온 후에도 전체 데이터를 ticketDataList에 저장하고 applyFilters를 호출합니다.
+    async function fetchTickets(refresh = false) {
+      try {
+        let url = "http://localhost:8000/tickets";
+        if (refresh) url += "?refresh=1";
+        console.log("Fetching tickets from:", url);
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+        const data = await response.json();
+        console.log("Tickets received:", data);
+        ticketDataList = data.tickets;
+        // 기존 renderTickets 대신 applyFilters 호출하여 필터가 적용된 결과로 렌더링
+        applyFilters();
+      } catch (error) {
+        console.error("Error fetching tickets:", error);
+        const tableBody = document.getElementById("ticketTableBody");
+        tableBody.innerHTML = "<tr><td colspan='16'>티켓 목록을 불러오는 중 오류가 발생했습니다.</td></tr>";
+      }
+    }
+
+
+     // 정렬 이벤트 등록
+  addSortingEventListeners();
+
+  document.getElementById("refreshBtn").addEventListener("click", function() {
+      fetchTickets(true);
+  });
+
+  document.getElementById("seatSearch").addEventListener("input", function() {
+      const searchText = this.value.trim().toLowerCase();
+      // ticketDataList는 전체 티켓 데이터를 저장하는 전역 변수
+      const filteredTickets = ticketDataList.filter(ticket => {
+        return ticket.seat_detail && ticket.seat_detail.toLowerCase().includes(searchText);
+      });
+      renderTickets(filteredTickets);
+    });
   // 초기 로드
   fetchTickets();
 
@@ -606,4 +1030,7 @@ document.addEventListener("DOMContentLoaded", function() {
   window.closeSaleDoneModal = closeSaleDoneModal;
   window.openSaleInfoForm = openSaleInfoForm;
   window.closeSaleInfoFormModal = closeSaleInfoFormModal;
+  window.openSaleDoneFormModal = openSaleDoneFormModal;
+  window.deleteSaleInfo = deleteSaleInfo;
+  window.deleteTicket = deleteTicket;
 });

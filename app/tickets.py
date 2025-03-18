@@ -63,7 +63,8 @@ def load_ticket_cache():
                     "card_approval_number": row.card_approval_number,
                     "product_use_date": row.product_use_date.isoformat() if row.product_use_date else None,
                     "product_name": row.product_name,
-                    "purchase_quantity": row.purchase_quantity,  # 티켓 수
+                    "purchase_quantity": row.purchase_quantity,
+                    "remaining_quantity": row.remaining_quantity,  # 새 컬럼 추가
                     "seat_detail": row.seat_detail,
                     "seat_image_name": row.seat_image_name,
                     "seat_image_url": seat_image_url
@@ -71,6 +72,7 @@ def load_ticket_cache():
         logging.info("✅ 티켓 캐시 로드 성공, 총 티켓 수: %d", len(ticket_cache))
     except Exception as e:
         logging.error("❌ 티켓 캐시 로드 실패: %s", e)
+
 
 
 def get_cached_tickets():

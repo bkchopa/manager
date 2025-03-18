@@ -75,11 +75,13 @@
 /* ★ Modal 내용 영역 스타일 (크기 확대) */
 .modal-content {
   background-color: #fefefe;
-  margin: 3% auto;
+  margin: 2% auto;         /* 모달이 화면 중앙에 위치하도록 상하좌우 여백 */
   padding: 30px;
   border: 1px solid #888;
-  width: 90%;
-  max-width: 800px;
+  width: 95%;              /* 모달 기본 폭을 95%로 확대 */
+  max-width: 1200px;       /* 화면이 넓을 때는 최대 1200px로 제한 */
+  max-height: 90vh;        /* 화면 높이의 90%까지 표시 */
+  overflow-y: auto;        /* 내용이 넘치면 스크롤 표시 */
   border-radius: 8px;
 }
 
@@ -117,6 +119,8 @@ form textarea {
   width: 100%;
   border-collapse: collapse;
   margin-top: 10px;
+  /* 추가: 고정 테이블 레이아웃 */
+  table-layout: fixed;
 }
 
 .sale-history-table th,
@@ -124,9 +128,29 @@ form textarea {
   padding: 8px;
   border: 1px solid #ddd;
   text-align: center;
+  /* 추가: 줄바꿈 설정 */
+  white-space: normal;
+  word-wrap: break-word;
+  word-break: break-word;
 }
 
 .sale-history-table th {
   background-color: #f4f4f4;
   font-weight: bold;
+}
+
+#saleHistoryModal {
+  z-index: 3000; /* saleInfoModal(2000)보다 높게 설정 */
+}
+
+#saleDoneModal {
+  z-index: 4000; /* 다른 모달보다 높은 값으로 설정 */
+}
+
+.sold {
+  background-color: #c8e6c9; /* 연한 초록색 */
+}
+
+.sold-out {
+  background-color: #c8e6c9; /* 연한 초록색 */
 }

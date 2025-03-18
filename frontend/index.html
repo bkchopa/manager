@@ -8,23 +8,38 @@
 </head>
 <body>
   <h1>🎟 티켓 목록</h1>
+  <div class="button-container">
+    <button id="openModalBtn">➕ 티켓 추가</button>
+    <button id="refreshBtn">새로고침</button>
+  </div>
+  <header style="display: flex; justify-content: space-between; align-items: center;">
+    <h1>🎟 티켓 목록</h1>
+    <div>
+      <input id="seatSearch" type="text" placeholder="좌석 상세 검색" style="padding: 5px; font-size: 16px; margin-right: 10px;">
+      <label>
+        <input id="availableOnly" type="checkbox">
+        판매 가능한 상품만 보기
+      </label>
+    </div>
+  </header>
   <table class="ticket-table">
     <thead>
       <tr>
-        <th>예약번호</th>
-        <th>구매처</th>
-        <th>구매자</th>
-        <th>구매일</th>
-        <th>결제금액</th>
-        <th>결제 방식</th>
-        <th>카드 회사</th>
-        <th>카드 번호</th>
-        <th>승인 번호</th>
-        <th>제품 사용일</th>
-        <th>제품 이름</th>
-        <th>티켓 수</th>
-        <th>좌석 상세</th>
-        <th>좌석 이미지</th>
+        <th class="sortable" data-column="reservation_number">예약번호</th>
+        <th class="sortable" data-column="purchase_source">구매처</th>
+        <th class="sortable" data-column="buyer">구매자</th>
+        <th class="sortable" data-column="purchase_date">구매일</th>
+        <th class="sortable" data-column="payment_amount">결제금액</th>
+        <th class="sortable" data-column="payment_method">결제 방식</th>
+        <th class="sortable" data-column="card_company">카드 회사</th>
+        <th class="sortable" data-column="card_number">카드 번호</th>
+        <th class="sortable" data-column="card_approval_number">승인 번호</th>
+        <th class="sortable" data-column="product_use_date">제품 사용일</th>
+        <th class="sortable" data-column="product_name">제품 이름</th>
+        <th class="sortable" data-column="purchase_quantity">티켓 수</th>
+        <th class="sortable" data-column="remaining_quantity">남은 티켓</th>
+        <th class="sortable" data-column="seat_detail">좌석 상세</th>
+        <th class="sortable" data-column="seat_image_name">좌석 이미지</th>
         <th>행동</th>
       </tr>
     </thead>
@@ -33,10 +48,7 @@
     </tbody>
   </table>
 
-  <div class="button-container">
-    <button id="openModalBtn">➕ 티켓 추가</button>
-    <button id="refreshBtn">새로고침</button>
-  </div>
+
 
   <!-- 확대 이미지 모달 -->
   <div id="imageModal" class="image-modal">
@@ -44,16 +56,25 @@
     <img id="modalImage" src="" alt="확대된 좌석 이미지" />
   </div>
 
-  <!-- 티켓 추가 모달 -->
+
+
+   <!-- 티켓 추가 모달 (수정된 부분) -->
   <div id="addTicketModal" class="modal">
     <div class="modal-content">
       <span class="close" onclick="closeAddTicketModal()">×</span>
       <h2>티켓 추가</h2>
+
+      <!-- HTML 요소 패치 영역 -->
+      <label>HTML 요소 붙여넣기:</label>
+      <textarea id="rawElementInputTicket" rows="4" style="width:100%;" placeholder="여기에 티켓 HTML 요소를 붙여넣으세요"></textarea>
+      <button id="patchElementBtnTicket">요소 패치</button>
+      <hr>
+
       <form id="addTicketForm">
         <label>예약번호: <input type="text" name="reservation_number" required /></label><br>
         <label>구매처: <input type="text" name="purchase_source" required /></label><br>
         <label>구매자: <input type="text" name="buyer" required /></label><br>
-        <label>구매일: <input type="datetime-local" name="purchase_date" required /></label><br>
+        <label>구매일: <input type="text" name="purchase_date" required placeholder="예: 2025.03.18" /></label><br>
         <label>결제금액: <input type="number" name="payment_amount" required /></label><br>
         <fieldset style="margin-top:10px; padding:10px;">
           <legend>카드 정보 (옵션)</legend>
@@ -62,8 +83,12 @@
           <label>카드 번호: <input type="text" name="card_number" /></label><br>
           <label>승인 번호: <input type="text" name="card_approval_number" /></label><br>
         </fieldset>
-        <label>좌석 상세: <input type="text" name="seat_detail" required /></label><br>
+        <label>제품 사용일: <input type="text" name="product_use_date" required placeholder="예: 2025.03.26 18:30" /></label><br>
+        <!-- 새로 추가된 제품 이름 필드 -->
+        <label>제품 이름: <input type="text" name="product_name" required /></label><br>
         <label>티켓 수: <input type="number" name="ticket_count" required /></label><br>
+        <input type="hidden" name="remaining_quantity" />
+        <label>좌석 상세: <input type="text" name="seat_detail" required /></label><br>
         <label>
           좌석 이미지:
           <input type="file" name="seat_image" id="seatImageInput" />
@@ -75,16 +100,21 @@
     </div>
   </div>
 
+
+
+
   <!-- 티켓 수정 모달 -->
   <div id="editTicketModal" class="modal">
     <div class="modal-content">
       <span class="close" onclick="closeEditTicketModal()">×</span>
       <h2>티켓 수정</h2>
       <form id="editTicketForm">
+        <!-- 예약번호는 hidden으로 -->
         <input type="hidden" name="reservation_number" />
         <label>구매처: <input type="text" name="purchase_source" required /></label><br>
         <label>구매자: <input type="text" name="buyer" required /></label><br>
-        <label>구매일: <input type="datetime-local" name="purchase_date" required /></label><br>
+        <!-- 구매일도 text 타입으로 통일 -->
+        <label>구매일: <input type="text" name="purchase_date" required placeholder="예: 2025.03.18" /></label><br>
         <label>결제금액: <input type="number" name="payment_amount" required /></label><br>
         <fieldset style="margin-top:10px; padding:10px;">
           <legend>카드 정보 (옵션)</legend>
@@ -93,8 +123,13 @@
           <label>카드 번호: <input type="text" name="card_number" /></label><br>
           <label>승인 번호: <input type="text" name="card_approval_number" /></label><br>
         </fieldset>
-        <label>좌석 상세: <input type="text" name="seat_detail" required /></label><br>
+        <!-- 제품 사용일 및 제품 이름 추가 -->
+        <label>제품 사용일: <input type="text" name="product_use_date" required placeholder="예: 2025.03.26 18:30" /></label><br>
+        <label>제품 이름: <input type="text" name="product_name" required /></label><br>
         <label>티켓 수: <input type="number" name="ticket_count" required /></label><br>
+        <!-- hidden 필드로 남은 티켓 -->
+        <input type="hidden" name="remaining_quantity" />
+        <label>좌석 상세: <input type="text" name="seat_detail" required /></label><br>
         <label>
           좌석 이미지:
           <input type="file" name="seat_image" id="editSeatImageInput" />
@@ -105,6 +140,7 @@
       </form>
     </div>
   </div>
+
 
   <!-- 판매 등록 정보 모달 (ticket_sale_info 등록/목록) -->
   <div id="saleInfoModal" class="modal">
@@ -204,6 +240,9 @@
             <th>예매번호</th>
             <th>제품번호</th>
             <th>주문번호</th>
+            <th>주문일자</th>         <!-- 추가 -->
+            <th>구매자</th>           <!-- 추가 -->
+            <th>연락처</th>           <!-- 추가 -->
             <th>티켓 등급</th>
             <th>티켓 위치</th>
             <th>티켓 구역</th>
