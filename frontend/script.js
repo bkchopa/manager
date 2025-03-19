@@ -1,4 +1,8 @@
+
+
 document.addEventListener("DOMContentLoaded", function() {
+
+  const SERVER_URL = "http://localhost:8000";
   "use strict";
 
   // 모달 및 폼 요소들
@@ -68,10 +72,8 @@ document.addEventListener("DOMContentLoaded", function() {
       }
       tickets.forEach(ticket => {
         const row = document.createElement("tr");
-        // 만약 남은 티켓이 0이면 행 전체에 sold-out 클래스를 추가
-        if (ticket.remaining_quantity === 0) {
-          row.classList.add("sold-out");
-        }
+        // 기존에는 remaining_quantity가 0이면 바로 sold-out 클래스를 추가했지만…
+        // 여기서는 그냥 기본적으로 렌더링 후 나중에 색상 업데이트
         row.innerHTML = `
           <td>${ticket.reservation_number}</td>
           <td>${ticket.purchase_source}</td>
@@ -99,14 +101,42 @@ document.addEventListener("DOMContentLoaded", function() {
           </td>
         `;
         tableBody.appendChild(row);
+
+        // 만약 남은 티켓이 0이면, 추가 fetch로 색상을 업데이트
+        if (ticket.remaining_quantity === 0) {
+          updateTicketRowColor(row, ticket.reservation_number);
+        }
       });
     }
 
+    async function updateTicketRowColor(rowElement, reservation_number) {
+      try {
+        const response = await fetch(`${SERVER_URL}/sale_done_list?reservation_number=${reservation_number}`);
+        if (!response.ok) {
+          console.error("Failed to fetch sale_done_list");
+          return;
+        }
+        const data = await response.json();
+        // sale_done 정보가 있으면 검사, 없으면 건드리지 않음.
+        if (data.sale_done && data.sale_done.length > 0) {
+          const allCompleted = data.sale_done.every(item => item.deal_status === "판매완료");
+          // 기존 sold-out 클래스를 제거하고, 모두 완료되었으면 green, 아니면 yellow
+          rowElement.classList.remove("sold-out");
+          if (allCompleted) {
+            rowElement.classList.add("sold-out-green");
+          } else {
+            rowElement.classList.add("sold-out-yellow");
+          }
+        }
+      } catch (err) {
+        console.error("Error updating row color:", err);
+      }
+    }
 
 
    async function fetchTickets(refresh = false) {
     try {
-      let url = "http://localhost:8000/tickets";
+      let url = "${SERVER_URL}/tickets";
       if (refresh) url += "?refresh=1";
       console.log("Fetching tickets from:", url);
       const response = await fetch(url);
@@ -189,7 +219,7 @@ document.addEventListener("DOMContentLoaded", function() {
       formData.append("seat_image", pastedImageFile, "pasted_image.png");
     }
     try {
-      const response = await fetch("http://localhost:8000/tickets", { method: "POST", body: formData });
+      const response = await fetch("${SERVER_URL}/tickets", { method: "POST", body: formData });
       if (!response.ok) throw new Error("Failed to add ticket");
       alert("티켓이 추가되었습니다!");
       closeAddTicketModal();
@@ -259,7 +289,7 @@ document.addEventListener("DOMContentLoaded", function() {
     }
     const reservation_number = editTicketForm.elements["reservation_number"].value;
     try {
-      const response = await fetch(`http://localhost:8000/tickets/${reservation_number}`, { method: "PATCH", body: formData });
+      const response = await fetch(`${SERVER_URL}/tickets/${reservation_number}`, { method: "PATCH", body: formData });
       if (!response.ok) throw new Error("Failed to update ticket");
       alert("티켓이 수정되었습니다!");
       closeEditTicketModal();
@@ -274,20 +304,35 @@ document.addEventListener("DOMContentLoaded", function() {
     saleInfoModal.style.display = "none";
   }
 
-  saleInfoForm.addEventListener("submit", async function(event) {
-    event.preventDefault();
-    const formData = new FormData(saleInfoForm);
-    try {
-      const response = await fetch("http://localhost:8000/sale_info", { method: "POST", body: formData });
-      if (!response.ok) throw new Error("판매 등록 실패");
-      alert("판매 등록 정보가 등록되었습니다!");
-      closeSaleInfoModal();
-      fetchTickets(true);
-    } catch (error) {
-      console.error("Error registering sale info:", error);
-      alert("판매 등록에 실패했습니다.");
-    }
-  });
+    saleInfoForm.addEventListener("submit", async function(event) {
+      event.preventDefault();
+      const formData = new FormData(saleInfoForm);
+      const prodnum = formData.get("prodnum");
+      try {
+        let response;
+        if (prodnum) {
+          // prodnum이 있으면 업데이트 (PUT)
+          response = await fetch(`${SERVER_URL}/sale_info/${prodnum}`, {
+            method: "PUT",
+            body: formData
+          });
+        } else {
+          // 없으면 신규 등록 (POST)
+          response = await fetch("${SERVER_URL}/sale_info", {
+            method: "POST",
+            body: formData
+          });
+        }
+        if (!response.ok) throw new Error(prodnum ? "판매 등록 업데이트 실패" : "판매 등록 실패");
+        alert(prodnum ? "판매 등록 정보가 업데이트되었습니다!" : "판매 등록 정보가 등록되었습니다!");
+        closeSaleInfoModal();
+        fetchTickets(true);
+      } catch (error) {
+        console.error("Error in sale info form submission:", error);
+        alert(prodnum ? "판매 등록 정보 업데이트에 실패했습니다." : "판매 등록 정보 등록에 실패했습니다.");
+      }
+    });
+
 
   // 판매 등록 정보 추가(신규) 모달 열기
     function openSaleInfoForm() {
@@ -568,9 +613,9 @@ document.addEventListener("DOMContentLoaded", function() {
     try {
       let response;
       if (currentSaleDoneOrderNum) {
-        response = await fetch(`http://localhost:8000/sale_done/${currentSaleDoneOrderNum}`, { method: "PUT", body: formData });
+        response = await fetch(`${SERVER_URL}/sale_done/${currentSaleDoneOrderNum}`, { method: "PUT", body: formData });
       } else {
-        response = await fetch("http://localhost:8000/sale_done", { method: "POST", body: formData });
+        response = await fetch("${SERVER_URL}/sale_done", { method: "POST", body: formData });
       }
       if (!response.ok) throw new Error("판매 완료 등록 실패");
       alert("판매 완료 정보가 저장되었습니다!");
@@ -588,7 +633,7 @@ document.addEventListener("DOMContentLoaded", function() {
   async function deleteSaleDone(order_num) {
     if (confirm("해당 판매 완료 정보를 삭제하시겠습니까?")) {
       try {
-        const response = await fetch(`http://localhost:8000/sale_done/${order_num}`, { method: "DELETE" });
+        const response = await fetch(`${SERVER_URL}/sale_done/${order_num}`, { method: "DELETE" });
         if (!response.ok) throw new Error("삭제 실패");
         alert("판매 완료 정보가 삭제되었습니다!");
         openSaleHistoryModal(saleInfoForm.elements["reservation_number"].value);
@@ -609,7 +654,7 @@ document.addEventListener("DOMContentLoaded", function() {
         saleHistoryModal.style.zIndex = "3000";
         saleHistoryModal.style.display = "block";
 
-        const response = await fetch(`http://localhost:8000/sale_done_list?prodnum=${prodnum}`);
+        const response = await fetch(`${SERVER_URL}/sale_done_list?prodnum=${prodnum}`);
         if (!response.ok) throw new Error(`GET /sale_done_list failed: ${response.status}`);
         const data = await response.json();
         console.log("sale_done data:", data);
@@ -661,7 +706,7 @@ document.addEventListener("DOMContentLoaded", function() {
     // 전역 변수: 현재 선택된 예약번호
 
 
-    async function openSaleInfoModal(reservationNumber) {
+   async function openSaleInfoModal(reservationNumber) {
       try {
         // 예약번호를 폼에 채워두고 전역 변수에 저장
         saleInfoForm.elements["reservation_number"].value = reservationNumber;
@@ -669,19 +714,23 @@ document.addEventListener("DOMContentLoaded", function() {
         console.log("openSaleInfoModal 호출됨, 전달된 reservationNumber:", reservationNumber);
         console.log("currentReservationNumber에 저장된 값:", currentReservationNumber);
 
-        // sale_info 불러오기
-        const response = await fetch(`http://localhost:8000/sale_info?reservation_number=${reservationNumber}`);
+        // 판매 등록 정보 불러오기
+        const response = await fetch(`${SERVER_URL}/sale_info?reservation_number=${reservationNumber}`);
         if (!response.ok) throw new Error(`GET /sale_info failed: ${response.status}`);
         const data = await response.json();
 
-        // sale_done 목록도 예약번호 기준으로 불러옵니다.
-        const responseDone = await fetch(`http://localhost:8000/sale_done_list?reservation_number=${reservationNumber}`);
-        let soldProdnums = new Set();
+        // 판매 완료 정보도 예약번호 기준으로 불러오기
+        const responseDone = await fetch(`${SERVER_URL}/sale_done_list?reservation_number=${reservationNumber}`);
+        let saleDoneByProdnum = {};
         if (responseDone.ok) {
           const dataDone = await responseDone.json();
-          // dataDone.sale_done가 있을 때, prodnum을 Set으로 만듭니다.
           if (dataDone.sale_done && dataDone.sale_done.length > 0) {
-            soldProdnums = new Set(dataDone.sale_done.map(item => item.prodnum));
+            dataDone.sale_done.forEach(item => {
+              if (!saleDoneByProdnum[item.prodnum]) {
+                saleDoneByProdnum[item.prodnum] = [];
+              }
+              saleDoneByProdnum[item.prodnum].push(item);
+            });
           }
         } else {
           console.error(`GET /sale_done_list failed: ${responseDone.status}`);
@@ -694,10 +743,17 @@ document.addEventListener("DOMContentLoaded", function() {
           saleInfoTableBody.innerHTML = `<tr><td colspan="12">판매 등록 정보가 없습니다.</td></tr>`;
         } else {
           data.sale_info.forEach(item => {
-            // 판매 완료 정보가 존재하면, 해당 prodnum이 soldProdnums에 있음
-            const rowClass = soldProdnums.has(item.prodnum) ? "sold" : "";
+            // 기본적으로 색상은 없음
+            let rowClass = "";
+            // 만약 해당 prodnum의 판매 완료 정보가 존재하면 색상 결정
+            if (saleDoneByProdnum[item.prodnum]) {
+              const saleDoneArray = saleDoneByProdnum[item.prodnum];
+              // 모두 deal_status가 "판매완료"인지 검사
+              const allCompleted = saleDoneArray.every(done => done.deal_status === "판매완료");
+              rowClass = allCompleted ? "sold-out-green" : "sold-out-yellow";
+            }
             const row = document.createElement("tr");
-            row.className = rowClass; // sold 클래스가 추가되면 CSS에서 초록색 배경 처리됨.
+            row.className = rowClass;
             row.innerHTML = `
               <td>${item.reservation_number}</td>
               <td>${item.prodnum}</td>
@@ -713,6 +769,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 <button onclick='openSaleHistoryModal(${JSON.stringify(item.prodnum)})'>판매 완료 정보</button>
               </td>
               <td>
+                <button onclick='openSaleInfoEditForm(${JSON.stringify(item)})'>수정</button>
                 <button onclick='deleteSaleInfo(${JSON.stringify(item.prodnum)})'>삭제</button>
               </td>
             `;
@@ -728,10 +785,11 @@ document.addEventListener("DOMContentLoaded", function() {
 
 
 
+
   async function deleteSaleInfo(prodnum) {
       if (confirm("해당 판매 등록 정보를 삭제하시겠습니까?")) {
         try {
-          const response = await fetch(`http://localhost:8000/sale_info/${prodnum}`, { method: "DELETE" });
+          const response = await fetch(`${SERVER_URL}/sale_info/${prodnum}`, { method: "DELETE" });
           if (!response.ok) throw new Error("삭제 실패");
           alert("판매 등록 정보가 삭제되었습니다!");
           fetchTickets();  // 또는 필요한 경우, 관련 모달도 새로고침
@@ -879,12 +937,154 @@ document.addEventListener("DOMContentLoaded", function() {
       form.elements["seat_detail"].value = ticketData.seat_detail || "";
     });
 
+    // HTML 요소에서 티켓 데이터를 추출하는 함수 (티링 버튼 전용)
+    function extractTiringData(htmlString) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlString, "text/html");
+      const ticketData = {};
+
+      // 1. reservation_number: "티켓 예매내역" 테이블에서 첫 번째 예약번호 추출
+      // (예: <div class="basic_tbl basic_tbl_v3"> 내부의 <label class="ng-binding">1481398558</label>)
+      let reservationElem = doc.querySelector("div.basic_tbl.basic_tbl_v3 table tbody label.ng-binding");
+      ticketData.reservation_number = reservationElem ? reservationElem.textContent.trim() : "";
+
+      // 2. purchase_source: "예매채널" 행의 값 (예: "PC웹")
+      let purchaseSource = "";
+      Array.from(doc.querySelectorAll("th")).forEach(th => {
+        if (th.textContent.trim() === "예매채널") {
+          const td = th.nextElementSibling;
+          if (td) {
+            purchaseSource = td.textContent.trim();
+          }
+        }
+      });
+      ticketData.purchase_source = purchaseSource;
+
+      // 3. buyer: "예매자" 행의 값 (예: "이선범")
+      let buyer = "";
+      Array.from(doc.querySelectorAll("th")).forEach(th => {
+        if (th.textContent.trim() === "예매자") {
+          const td = th.nextElementSibling;
+          if (td) {
+            buyer = td.textContent.trim();
+          }
+        }
+      });
+      ticketData.buyer = buyer;
+
+      // 4. purchase_date: "예매일" 행의 값 (예: "2025.03.15")
+      let purchaseDate = "";
+      Array.from(doc.querySelectorAll("th")).forEach(th => {
+        if (th.textContent.trim() === "예매일") {
+          const td = th.nextElementSibling;
+          if (td) {
+            purchaseDate = td.textContent.trim();
+          }
+        }
+      });
+      ticketData.purchase_date = purchaseDate;
+
+      // 5. payment_amount: "결제정보" 영역의 총 결제금액
+      let paymentAmountElem = doc.querySelector("div.basic_tbl_v4 table tfoot tr.final.final_option span.number.ng-binding");
+      if (paymentAmountElem) {
+        const amountText = paymentAmountElem.textContent.replace(/[,원\s]/g, "");
+        ticketData.payment_amount = parseInt(amountText, 10) || 0;
+      } else {
+        ticketData.payment_amount = 0;
+      }
+
+      // 6. payment_method: "결제상세정보" 영역에서 결제수단 추출 (예: "신용카드 간편결제")
+      let paymentMethodElem = doc.querySelector("div.basic_tbl_v4 table tfoot ul.final_list li");
+      if (paymentMethodElem) {
+        let text = paymentMethodElem.textContent.trim();
+        let match = text.match(/^[^\d]+/);
+        ticketData.payment_method = match ? match[0].trim() : "";
+      } else {
+        ticketData.payment_method = "";
+      }
+
+      // 7. product_use_date: "관람일시" 행의 값에서 괄호 안의 요일 제거
+      let productUseDate = "";
+      Array.from(doc.querySelectorAll("th")).forEach(th => {
+        if (th.textContent.trim() === "관람일시") {
+          const td = th.nextElementSibling;
+          if (td) {
+            // 정규표현식으로 괄호 및 그 안의 내용을 제거
+            productUseDate = td.textContent.replace(/\([^)]*\)/, "").trim();
+          }
+        }
+      });
+      ticketData.product_use_date = productUseDate;
+
+      // 8. product_name: "티켓명" 행의 값에서 티켓명을 추출
+      // (예: [2025 신한 SOL Bank KBO 리그] 삼성 라이온즈 vs 키움히어로즈)
+      let productName = "";
+      // 찾을 때 "티켓명"이라는 헤더를 기준으로 같은 행의 td를 가져옴
+      const ticketNameHeader = Array.from(doc.querySelectorAll("th")).find(th => th.textContent.trim() === "티켓명");
+      if (ticketNameHeader) {
+        const productNameCell = ticketNameHeader.nextElementSibling;
+        if (productNameCell) {
+          // innerText로 여러 줄을 합쳐서 가져옴 (줄바꿈 제거)
+          productName = productNameCell.innerText.replace(/\s+/g, " ").trim();
+        }
+      }
+      ticketData.product_name = productName;
+
+      // 9. purchase_quantity 및 remaining_quantity: "예매한 티켓정보"에서 좌석정보 <p> 태그의 개수
+      const seatDetailElems = doc.querySelectorAll("div.basic_tbl_v4 table tbody tr:not(.line) p.ng-binding");
+      const purchase_quantity = seatDetailElems ? seatDetailElems.length : 0;
+      ticketData.purchase_quantity = purchase_quantity;
+      ticketData.remaining_quantity = purchase_quantity;
+
+      // 10. seat_detail: 각 좌석정보 <p>의 텍스트들을 쉼표로 연결
+      const seatDetails = [];
+      seatDetailElems.forEach(p => {
+        seatDetails.push(p.textContent.trim());
+      });
+      ticketData.seat_detail = seatDetails.join(", ");
+
+      // 11. 카드 관련 필드: HTML에 값이 없으므로 빈 문자열로 처리
+      ticketData.card_company = "";
+      ticketData.card_number = "";
+      ticketData.card_approval_number = "";
+
+      // 12. seat_image_name: 제공되지 않으므로 빈 문자열
+      ticketData.seat_image_name = "";
+
+      return ticketData;
+    }
+
+    // 티링 버튼 클릭 시 추출한 데이터를 티켓 추가 폼에 채워넣기
+    // (티링 버튼의 id를 "patchElementBtnTiring", HTML 입력 textarea의 id를 "rawElementInputTicket"라고 가정)
+    document.getElementById("patchElementBtnTiring").addEventListener("click", function() {
+      const rawHtml = document.getElementById("rawElementInputTicket").value;
+      if (!rawHtml) {
+        alert("먼저 HTML 요소를 붙여넣으세요.");
+        return;
+      }
+      const ticketData = extractTiringData(rawHtml);
+      console.log("티링으로 추출된 데이터:", ticketData);
+
+      const form = document.getElementById("addTicketForm");
+      form.elements["reservation_number"].value = ticketData.reservation_number || "";
+      form.elements["purchase_source"].value = ticketData.purchase_source || "";
+      form.elements["buyer"].value = ticketData.buyer || "";
+      form.elements["purchase_date"].value = ticketData.purchase_date || "";
+      form.elements["payment_amount"].value = ticketData.payment_amount || "";
+      form.elements["payment_method"].value = ticketData.payment_method || "";
+      form.elements["product_use_date"].value = ticketData.product_use_date || "";
+      form.elements["product_name"].value = ticketData.product_name || "";
+      form.elements["ticket_count"].value = ticketData.purchase_quantity || "";
+      form.elements["remaining_quantity"].value = ticketData.remaining_quantity || "";
+      form.elements["seat_detail"].value = ticketData.seat_detail || "";
+    });
+
 
     async function deleteTicket(reservation_number) {
       if (confirm("해당 티켓과 관련된 판매 등록 정보 및 판매 완료 정보까지 모두 삭제하시겠습니까?")) {
         try {
           // 1. 해당 티켓의 판매 등록 정보 조회
-          let saleInfoResponse = await fetch(`http://localhost:8000/sale_info?reservation_number=${reservation_number}`);
+          let saleInfoResponse = await fetch(`${SERVER_URL}/sale_info?reservation_number=${reservation_number}`);
           if (!saleInfoResponse.ok) {
             throw new Error("판매 등록 정보 조회에 실패했습니다.");
           }
@@ -893,7 +1093,7 @@ document.addEventListener("DOMContentLoaded", function() {
           // 2. 조회된 판매 등록 정보가 있으면, 각 prodnum에 대해 DELETE 요청 실행
           if (saleInfoData.sale_info && saleInfoData.sale_info.length > 0) {
             for (const info of saleInfoData.sale_info) {
-              let deleteSaleInfoResponse = await fetch(`http://localhost:8000/sale_info/${info.prodnum}`, {
+              let deleteSaleInfoResponse = await fetch(`${SERVER_URL}/sale_info/${info.prodnum}`, {
                 method: "DELETE"
               });
               if (!deleteSaleInfoResponse.ok) {
@@ -903,7 +1103,7 @@ document.addEventListener("DOMContentLoaded", function() {
           }
 
           // 3. 티켓 삭제
-          const response = await fetch(`http://localhost:8000/tickets/${reservation_number}`, {
+          const response = await fetch(`${SERVER_URL}/tickets/${reservation_number}`, {
             method: "DELETE"
           });
           if (!response.ok) {
@@ -932,6 +1132,24 @@ document.addEventListener("DOMContentLoaded", function() {
     saleInfoForm.elements["quantity"].value = "";
     saleInfoForm.elements["prodnum"].value = "";
   }
+
+function openSaleInfoEditForm(saleInfoRecord) {
+      saleInfoForm.reset();
+      // 기존 폼 필드에 값을 채워넣음
+      saleInfoForm.elements["reservation_number"].value = saleInfoRecord.reservation_number || "";
+      saleInfoForm.elements["ticket_grade"].value = saleInfoRecord.ticket_grade || "";
+      saleInfoForm.elements["ticket_floor"].value = saleInfoRecord.ticket_floor || "";
+      saleInfoForm.elements["ticket_area"].value = saleInfoRecord.ticket_area || "";
+      saleInfoForm.elements["product_category"].value = saleInfoRecord.product_category || "";
+      saleInfoForm.elements["product_datetime"].value = saleInfoRecord.product_datetime || "";
+      saleInfoForm.elements["product_description"].value = saleInfoRecord.product_description || "";
+      saleInfoForm.elements["price"].value = saleInfoRecord.price || "";
+      saleInfoForm.elements["quantity"].value = saleInfoRecord.quantity || "";
+      // hidden 필드 prodnum를 채워 넣어 수정 여부 판단
+      saleInfoForm.elements["prodnum"].value = saleInfoRecord.prodnum || "";
+
+      saleInfoFormModal.style.display = "block";
+    }
 
    function openSaleDoneFormModal() {
       // 폼 초기화 (필요한 경우 reset() 사용)
@@ -979,7 +1197,7 @@ document.addEventListener("DOMContentLoaded", function() {
     // fetchTickets 함수에서 데이터를 받아온 후에도 전체 데이터를 ticketDataList에 저장하고 applyFilters를 호출합니다.
     async function fetchTickets(refresh = false) {
       try {
-        let url = "http://localhost:8000/tickets";
+        let url = "${SERVER_URL}/tickets";
         if (refresh) url += "?refresh=1";
         console.log("Fetching tickets from:", url);
         const response = await fetch(url);
@@ -1033,4 +1251,5 @@ document.addEventListener("DOMContentLoaded", function() {
   window.openSaleDoneFormModal = openSaleDoneFormModal;
   window.deleteSaleInfo = deleteSaleInfo;
   window.deleteTicket = deleteTicket;
+  window.openSaleInfoEditForm = openSaleInfoEditForm;
 });

@@ -154,3 +154,10 @@ form textarea {
 .sold-out {
   background-color: #c8e6c9; /* 연한 초록색 */
 }
+
+.sold-out-green {
+  background-color: #c8e6c9; /* 연한 초록색 */
+}
+.sold-out-yellow {
+  background-color: #fff9c4; /* 연한 노란색 */
+}

@@ -290,12 +290,20 @@ async def register_sale_info(
         price: int = Form(...),
         quantity: int = Form(...)
 ):
-    try:
-        product_datetime_dt = datetime.datetime.fromisoformat(product_datetime)
-        logging.info("product_datetime 변환 성공: %s", product_datetime_dt)
-    except Exception as e:
-        logging.error("product_datetime 변환 실패: %s", e)
+    import datetime
+    dt_formats = ["%Y.%m.%d %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"]
+    product_datetime_dt = None
+    for fmt in dt_formats:
+        try:
+            product_datetime_dt = datetime.datetime.strptime(product_datetime.strip(), fmt)
+            logging.info("✅ product_datetime 변환 성공 (format %s): %s", fmt, product_datetime_dt)
+            break
+        except Exception as e:
+            logging.info("제품 일시 변환 시도 실패 (format %s): %s", fmt, e)
+    if product_datetime_dt is None:
+        logging.error("❌ 모든 포맷으로 제품 일시 변환 실패, 현재시간 사용")
         product_datetime_dt = datetime.datetime.now()
+        logging.info("🔄 product_datetime fallback: %s", product_datetime_dt)
 
     try:
         with engine.begin() as connection:
@@ -318,6 +326,66 @@ async def register_sale_info(
     except Exception as e:
         logging.error("판매 등록 정보 저장 중 오류 발생: %s", e)
         raise HTTPException(status_code=500, detail="판매 등록 정보 저장 실패")
+
+
+@app.put("/sale_info/{prodnum}")
+async def update_sale_info(
+    prodnum: str,
+    reservation_number: str = Form(...),
+    ticket_grade: str = Form(...),
+    ticket_floor: str = Form(...),
+    ticket_area: str = Form(...),
+    product_category: str = Form(...),
+    product_datetime: str = Form(...),
+    product_description: str = Form(...),
+    price: int = Form(...),
+    quantity: int = Form(...)
+):
+    import datetime
+    try:
+        # "2025.04.19 18:00" 형식의 문자열로 파싱
+        product_datetime_dt = datetime.datetime.strptime(product_datetime.strip(), "%Y.%m.%d %H:%M")
+        logging.info("✅ product_datetime 파싱 성공: %s", product_datetime_dt)
+    except Exception as e:
+        logging.error("❌ product_datetime 파싱 실패: %s", e)
+        product_datetime_dt = datetime.datetime.now()
+
+    try:
+        with engine.begin() as connection:
+            update_query = ticket_sale_info.update().where(ticket_sale_info.c.prodnum == prodnum).values(
+                reservation_number=reservation_number,
+                ticket_grade=ticket_grade,
+                ticket_floor=ticket_floor,
+                ticket_area=ticket_area,
+                product_category=product_category,
+                product_datetime=product_datetime_dt,
+                product_description=product_description,
+                price=price,
+                quantity=quantity
+            )
+            result = connection.execute(update_query)
+            if result.rowcount == 0:
+                # 레코드가 없으므로 새로 insert 실행
+                connection.execute(
+                    ticket_sale_info.insert().values(
+                        reservation_number=reservation_number,
+                        prodnum=prodnum,
+                        ticket_grade=ticket_grade,
+                        ticket_floor=ticket_floor,
+                        ticket_area=ticket_area,
+                        product_category=product_category,
+                        product_datetime=product_datetime_dt,
+                        product_description=product_description,
+                        price=price,
+                        quantity=quantity
+                    )
+                )
+                logging.info("업데이트 대상 레코드가 없어서 신규 판매 등록 정보를 삽입했습니다. (prodnum: %s)", prodnum)
+        logging.info("판매 등록 정보 업데이트 성공: prodnum %s", prodnum)
+        return {"message": "판매 등록 정보가 업데이트되었습니다!"}
+    except Exception as e:
+        logging.error("판매 등록 정보 업데이트 중 오류 발생: %s", e)
+        raise HTTPException(status_code=500, detail="판매 등록 정보 업데이트 실패")
 
 @app.get("/sale_info")
 def get_sale_info(reservation_number: str = Query(...)):
