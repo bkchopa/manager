@@ -4,10 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>티켓 목록</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
   <h1>🎟 티켓 목록</h1>
+  <div id="prodnumSearchContainer">
+    <input type="text" id="prodnumInput" placeholder="제품번호를 입력하세요" />
+    <button id="prodnumSearchBtn">티켓 검색</button>
+  </div>
+  <!-- 검색 결과를 표시할 영역 (예: 모달 또는 별도의 영역) -->
+  <div id="ticketDetails"></div>
   <div class="button-container">
     <button id="openModalBtn">➕ 티켓 추가</button>
     <button id="refreshBtn">새로고침</button>
@@ -265,6 +271,6 @@
     </div>
   </div>
 
-  <script src="script.js"></script>
+  <script src="/static/script.js"></script>
 </body>
 </html>

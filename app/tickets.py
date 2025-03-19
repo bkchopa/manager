@@ -7,6 +7,7 @@ from app.models import tickets_table
 from datetime import datetime
 from app.config import SEAT_IMAGE_FOLDER
 from app.config import SERVER_URL
+import datetime
 
 # ✅ 로깅 설정 (로그 포맷과 레벨 설정)
 logging.basicConfig(
@@ -75,6 +76,20 @@ def load_ticket_cache():
         logging.error("❌ 티켓 캐시 로드 실패: %s", e)
 
 
+def serialize_ticket(ticket):
+    # ticket이 이미 dict라면, 그냥 ticket.items() 사용
+    if isinstance(ticket, dict):
+        items = ticket.items()
+    # 그렇지 않고 _mapping 속성이 있다면 그걸 사용
+    elif hasattr(ticket, '_mapping'):
+        items = ticket._mapping.items()
+    else:
+        items = ticket.items()
+
+    return {
+        k: (v.isoformat() if isinstance(v, datetime.datetime) else v)
+        for k, v in items
+    }
 
 def get_cached_tickets():
     """

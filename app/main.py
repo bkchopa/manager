@@ -1,6 +1,6 @@
 import logging
 from typing import Optional
-
+from fastapi.staticfiles import StaticFiles
 from fastapi import FastAPI, UploadFile, File, Form, Query, HTTPException
 from sqlalchemy import select, delete
 from app.database import engine
@@ -18,8 +18,7 @@ from app.models import tickets_table
 import json
 from fastapi.middleware.cors import CORSMiddleware
 import datetime
-from fastapi.staticfiles import StaticFiles
-
+from app.tickets import serialize_ticket
 
 
 
@@ -49,7 +48,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/static", StaticFiles(directory="../frontend", html=True), name="static")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
+
+app.mount("/static", StaticFiles(directory=FRONTEND_DIR, html=True), name="static")
+
+
+
+@app.get("/")
+async def read_index():
+    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
 
 @app.get("/api/tickets")
 def get_tickets(refresh: bool = False):
@@ -61,9 +69,10 @@ def get_tickets(refresh: bool = False):
     logging.info("📜 반환 데이터: %s", json.dumps(tickets_data, indent=2, ensure_ascii=False)[:500])
     return {"tickets": tickets_data}
 
-@app.get("/api/seat-image/{image_name}")
+@app.get("/seat-image/{image_name}")
 def get_seat_image(image_name: str):
     image_path = os.path.join(SEAT_IMAGE_FOLDER, image_name)
+    print("Serving image from:", image_path)
     if os.path.exists(image_path):
         return FileResponse(image_path)
     else:
@@ -185,17 +194,19 @@ async def update_ticket(
         seat_image: UploadFile = File(None)
 ):
     import datetime, os, shutil, re
-    logging.info("Updating ticket: %s", reservation_number)
-
-    # 구매일 파싱 (예: "2025.03.18")
     logging.info("📝 Raw purchase_date: '%s'", purchase_date)
     try:
-        purchase_date_dt = datetime.datetime.strptime(purchase_date.strip(), "%Y.%m.%d")
-        logging.info("✅ purchase_date 파싱 성공: %s", purchase_date_dt)
+        # ISO 형식(예: "2025-03-18T00:00:00") 파싱 시도
+        purchase_date_dt = datetime.datetime.fromisoformat(purchase_date.strip())
+        logging.info("✅ purchase_date fromisoformat 성공: %s", purchase_date_dt)
     except Exception as e:
-        logging.error("❌ purchase_date 파싱 실패: %s", e)
-        purchase_date_dt = datetime.datetime.now()
-        logging.info("🔄 purchase_date fallback: %s", purchase_date_dt)
+        try:
+            # "%Y.%m.%d" 형식으로 파싱 시도
+            purchase_date_dt = datetime.datetime.strptime(purchase_date.strip(), "%Y.%m.%d")
+            logging.info("✅ purchase_date strptime 성공: %s", purchase_date_dt)
+        except Exception as e2:
+            logging.error("❌ purchase_date 파싱 실패: %s", e2)
+            raise HTTPException(status_code=400, detail="Invalid purchase_date format")
 
     # 제품 사용일 파싱 (예: "2025.03.26(수) 18:30")
     logging.info("📝 Raw product_use_date: '%s'", product_use_date)
@@ -219,7 +230,8 @@ async def update_ticket(
     logging.info("📝 Received product_name: '%s'", product_name)
 
     image_filename = None
-    if seat_image:
+    # 파일이 선택되었고 파일명이 비어있지 않은 경우에만 처리
+    if seat_image and seat_image.filename:
         try:
             original_filename = seat_image.filename
             ext = os.path.splitext(original_filename)[1]
@@ -263,6 +275,28 @@ async def update_ticket(
 
     return {"message": "티켓이 수정되었습니다!"}
 
+@app.get("/api/tickets/by-prodnum")
+def get_ticket_by_prodnum(prodnum: str = Query(...)):
+    with engine.connect() as connection:
+        # 1. ticket_sale_info 테이블에서 prodnum으로 판매 등록 정보를 찾기
+        sale_info_record = connection.execute(
+            select(ticket_sale_info).where(ticket_sale_info.c.prodnum == prodnum)
+        ).fetchone()
+        if not sale_info_record:
+            raise HTTPException(status_code=404, detail="판매 등록 정보가 없습니다.")
+
+        # 2. 해당 판매 등록 정보에서 예약번호 추출
+        reservation_number = sale_info_record.reservation_number
+
+        # 3. ticket 테이블에서 해당 예약번호로 티켓 조회
+        ticket_record = connection.execute(
+            select(tickets_table).where(tickets_table.c.reservation_number == reservation_number)
+        ).fetchone()
+        if not ticket_record:
+            raise HTTPException(status_code=404, detail="티켓 정보를 찾을 수 없습니다.")
+
+        # 4. 티켓 정보를 직렬화하여 반환
+        return {"ticket": serialize_ticket(ticket_record)}
 
 @app.delete("/api/tickets/{reservation_number}")
 async def delete_ticket(reservation_number: str):

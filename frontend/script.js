@@ -326,7 +326,6 @@ document.addEventListener("DOMContentLoaded", function() {
         if (!response.ok) throw new Error(prodnum ? "판매 등록 업데이트 실패" : "판매 등록 실패");
         alert(prodnum ? "판매 등록 정보가 업데이트되었습니다!" : "판매 등록 정보가 등록되었습니다!");
         closeSaleInfoModal();
-        fetchTickets(true);
       } catch (error) {
         console.error("Error in sale info form submission:", error);
         alert(prodnum ? "판매 등록 정보 업데이트에 실패했습니다." : "판매 등록 정보 등록에 실패했습니다.");
@@ -397,9 +396,17 @@ document.addEventListener("DOMContentLoaded", function() {
         .filter(text => text.length > 0)
         .join(" / ");
 
-      // 상품 상세 정보 (product_description): <div class="cont-my-file"> 내의 p 태그
-      const descEl = doc.querySelector("div.cont-my-file .text-defult p");
-      const product_description = descEl ? descEl.textContent.trim() : "";
+      // 상품 설명 추출: prd-title type-md와 type-sm 영역의 span 태그들을 조합
+      const prdTitleMdEls = doc.querySelectorAll("div.prd-title.type-md span");
+      const prdTitleSmEls = doc.querySelectorAll("div.prd-title.type-sm span");
+      const descMd = Array.from(prdTitleMdEls)
+        .map(el => el.textContent.trim())
+        .join(" ");
+      const descSm = Array.from(prdTitleSmEls)
+        .map(el => el.textContent.trim())
+        .join(" ");
+
+      const product_description = (descMd + " " + descSm).trim();
 
       // 단일 가격 (unit_price): <span class="price">20,000원<em>(60FP 적립)</em></span>
       const priceEl = doc.querySelector("div.form-box span.price");
@@ -1213,7 +1220,48 @@ function openSaleInfoEditForm(saleInfoRecord) {
         tableBody.innerHTML = "<tr><td colspan='16'>티켓 목록을 불러오는 중 오류가 발생했습니다.</td></tr>";
       }
     }
+    // 제품번호로 티켓을 검색하는 함수
+    async function searchTicketByProdnum() {
+      const prodnum = document.getElementById("prodnumInput").value.trim();
+      if (!prodnum) {
+        alert("제품번호를 입력하세요.");
+        return;
+      }
 
+      try {
+        const response = await fetch(`${SERVER_URL}/tickets/by-prodnum?prodnum=${encodeURIComponent(prodnum)}`);
+        if (!response.ok) {
+          throw new Error(`HTTP error: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log("검색된 티켓:", data.ticket);
+        renderTicketDetails(data.ticket);
+      } catch (error) {
+        console.error("제품번호로 티켓 검색 중 오류 발생:", error);
+        alert("티켓 정보를 찾을 수 없습니다.");
+      }
+    }
+
+    // 검색된 티켓 정보를 표시하는 함수 (예시로 간단하게 innerHTML로 출력)
+    function renderTicketDetails(ticket) {
+      const container = document.getElementById("ticketDetails");
+      container.innerHTML = `
+        <h3>검색 결과</h3>
+        <p>예약번호: ${ticket.reservation_number}</p>
+        <p>구매처: ${ticket.purchase_source}</p>
+        <p>구매자: ${ticket.buyer}</p>
+        <p>구매일: ${ticket.purchase_date}</p>
+        <p>제품 사용일: ${ticket.product_use_date}</p>
+        <p>제품 이름: ${ticket.product_name}</p>
+        <p>티켓 수: ${ticket.purchase_quantity}</p>
+        <p>남은 티켓: ${ticket.remaining_quantity}</p>
+        <p>좌석 상세: ${ticket.seat_detail}</p>
+        ${ticket.seat_image_url ? `<img src="${ticket.seat_image_url}" alt="좌석 이미지" style="max-width:200px;">` : ""}
+      `;
+    }
+
+    // 버튼에 이벤트 리스너 등록
+    document.getElementById("prodnumSearchBtn").addEventListener("click", searchTicketByProdnum);
 
      // 정렬 이벤트 등록
   addSortingEventListeners();
@@ -1252,4 +1300,5 @@ function openSaleInfoEditForm(saleInfoRecord) {
   window.deleteSaleInfo = deleteSaleInfo;
   window.deleteTicket = deleteTicket;
   window.openSaleInfoEditForm = openSaleInfoEditForm;
+  window.closeImageModal = closeImageModal;
 });
