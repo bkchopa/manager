@@ -6,6 +6,7 @@ from app.database import engine
 from app.models import tickets_table
 from datetime import datetime
 from app.config import SEAT_IMAGE_FOLDER
+from app.config import SERVER_URL
 
 # ✅ 로깅 설정 (로그 포맷과 레벨 설정)
 logging.basicConfig(
@@ -48,7 +49,7 @@ def load_ticket_cache():
             ticket_cache = []
             for row in tickets:
                 seat_image_url = (
-                    f"${SERVER_URL}/seat-image/{row.seat_image_name}"
+                    f"{SERVER_URL}/seat-image/{row.seat_image_name}"
                     if row.seat_image_name else None
                 )
                 ticket_cache.append({

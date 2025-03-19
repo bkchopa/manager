@@ -43,13 +43,15 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://59.13.119.90:8000", "http://localhost:8000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-@app.get("/tickets")
+app.mount("/static", StaticFiles(directory="../frontend", html=True), name="static")
+
+@app.get("/api/tickets")
 def get_tickets(refresh: bool = False):
     logging.info("📢 /tickets API 호출됨 (refresh=%s)", refresh)
     if refresh:
@@ -59,7 +61,7 @@ def get_tickets(refresh: bool = False):
     logging.info("📜 반환 데이터: %s", json.dumps(tickets_data, indent=2, ensure_ascii=False)[:500])
     return {"tickets": tickets_data}
 
-@app.get("/seat-image/{image_name}")
+@app.get("/api/seat-image/{image_name}")
 def get_seat_image(image_name: str):
     image_path = os.path.join(SEAT_IMAGE_FOLDER, image_name)
     if os.path.exists(image_path):
@@ -68,7 +70,7 @@ def get_seat_image(image_name: str):
         return {"error": "Image not found"}
 
 
-@app.post("/tickets")
+@app.post("/api/tickets")
 async def add_ticket(
         reservation_number: str = Form(...),
         purchase_source: str = Form(...),
@@ -165,7 +167,7 @@ async def add_ticket(
     return {"message": "티켓이 추가되었습니다!"}
 
 
-@app.patch("/tickets/{reservation_number}")
+@app.patch("/api/tickets/{reservation_number}")
 async def update_ticket(
         reservation_number: str,
         purchase_source: str = Form(...),
@@ -262,7 +264,7 @@ async def update_ticket(
     return {"message": "티켓이 수정되었습니다!"}
 
 
-@app.delete("/tickets/{reservation_number}")
+@app.delete("/api/tickets/{reservation_number}")
 async def delete_ticket(reservation_number: str):
     logging.info("Deleting ticket: %s", reservation_number)
     try:
@@ -277,7 +279,7 @@ async def delete_ticket(reservation_number: str):
         raise HTTPException(status_code=500, detail="티켓 삭제 실패")
     return {"message": "티켓이 삭제되었습니다!"}
 
-@app.post("/sale_info")
+@app.post("/api/sale_info")
 async def register_sale_info(
         reservation_number: str = Form(...),
         prodnum: str = Form(...),
@@ -328,7 +330,7 @@ async def register_sale_info(
         raise HTTPException(status_code=500, detail="판매 등록 정보 저장 실패")
 
 
-@app.put("/sale_info/{prodnum}")
+@app.put("/api/sale_info/{prodnum}")
 async def update_sale_info(
     prodnum: str,
     reservation_number: str = Form(...),
@@ -387,7 +389,7 @@ async def update_sale_info(
         logging.error("판매 등록 정보 업데이트 중 오류 발생: %s", e)
         raise HTTPException(status_code=500, detail="판매 등록 정보 업데이트 실패")
 
-@app.get("/sale_info")
+@app.get("/api/sale_info")
 def get_sale_info(reservation_number: str = Query(...)):
     try:
         with engine.connect() as connection:
@@ -415,7 +417,7 @@ def get_sale_info(reservation_number: str = Query(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 # GET 엔드포인트를 "/sale_done_list"로 분리 (GET 방식)
-@app.get("/sale_done_list")
+@app.get("/api/sale_done_list")
 def get_sale_done_list(reservation_number: Optional[str] = None, prodnum: Optional[str] = None):
     try:
         with engine.connect() as connection:
@@ -477,7 +479,7 @@ def get_sale_done_list(reservation_number: Optional[str] = None, prodnum: Option
 
 
 
-@app.post("/sale_done")
+@app.post("/api/sale_done")
 async def register_sale_done(
         prodnum: str = Form(...),
         order_num: str = Form(...),
@@ -537,7 +539,7 @@ async def register_sale_done(
         raise HTTPException(status_code=500, detail="판매 완료 등록 실패")
 
 
-@app.put("/sale_done/{order_num}")
+@app.put("/api/sale_done/{order_num}")
 async def update_sale_done(order_num: str,
                              buyer_name: str = Form(...),
                              buyer_contact: str = Form(...),
@@ -572,7 +574,7 @@ async def update_sale_done(order_num: str,
         logging.error("판매 완료 정보 업데이트 중 오류 발생: %s", e)
         raise HTTPException(status_code=500, detail="판매 완료 정보 업데이트 실패")
 
-@app.delete("/sale_done/{order_num}")
+@app.delete("/api/sale_done/{order_num}")
 def delete_sale_done(order_num: str):
     try:
         with engine.begin() as connection:
@@ -614,7 +616,7 @@ def delete_sale_done(order_num: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.delete("/sale_info/{prodnum}")
+@app.delete("/api/sale_info/{prodnum}")
 def delete_sale_info(prodnum: str):
     try:
         with engine.begin() as connection:

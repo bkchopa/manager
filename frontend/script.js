@@ -1,8 +1,8 @@
-
+const SERVER_URL = 'http://59.13.119.90:8000/api';
 
 document.addEventListener("DOMContentLoaded", function() {
 
-  const SERVER_URL = "http://localhost:8000";
+
   "use strict";
 
   // 모달 및 폼 요소들
@@ -136,7 +136,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
    async function fetchTickets(refresh = false) {
     try {
-      let url = "${SERVER_URL}/tickets";
+      let url = `${SERVER_URL}/tickets`;
       if (refresh) url += "?refresh=1";
       console.log("Fetching tickets from:", url);
       const response = await fetch(url);
@@ -219,7 +219,7 @@ document.addEventListener("DOMContentLoaded", function() {
       formData.append("seat_image", pastedImageFile, "pasted_image.png");
     }
     try {
-      const response = await fetch("${SERVER_URL}/tickets", { method: "POST", body: formData });
+      const response = await fetch(`${SERVER_URL}/tickets`, { method: "POST", body: formData });
       if (!response.ok) throw new Error("Failed to add ticket");
       alert("티켓이 추가되었습니다!");
       closeAddTicketModal();
@@ -318,7 +318,7 @@ document.addEventListener("DOMContentLoaded", function() {
           });
         } else {
           // 없으면 신규 등록 (POST)
-          response = await fetch("${SERVER_URL}/sale_info", {
+          response = await fetch(`${SERVER_URL}/sale_info`, {
             method: "POST",
             body: formData
           });
@@ -615,7 +615,7 @@ document.addEventListener("DOMContentLoaded", function() {
       if (currentSaleDoneOrderNum) {
         response = await fetch(`${SERVER_URL}/sale_done/${currentSaleDoneOrderNum}`, { method: "PUT", body: formData });
       } else {
-        response = await fetch("${SERVER_URL}/sale_done", { method: "POST", body: formData });
+        response = await fetch(`${SERVER_URL}/sale_done`, { method: "POST", body: formData });
       }
       if (!response.ok) throw new Error("판매 완료 등록 실패");
       alert("판매 완료 정보가 저장되었습니다!");
@@ -1197,7 +1197,7 @@ function openSaleInfoEditForm(saleInfoRecord) {
     // fetchTickets 함수에서 데이터를 받아온 후에도 전체 데이터를 ticketDataList에 저장하고 applyFilters를 호출합니다.
     async function fetchTickets(refresh = false) {
       try {
-        let url = "${SERVER_URL}/tickets";
+        let url = `${SERVER_URL}/tickets`;
         if (refresh) url += "?refresh=1";
         console.log("Fetching tickets from:", url);
         const response = await fetch(url);
