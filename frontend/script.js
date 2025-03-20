@@ -519,30 +519,40 @@ document.addEventListener("DOMContentLoaded", function() {
       const product_description = (prdTitleMdText + " " + prdTitleSmText).trim();
       console.log("product_description:", product_description);
 
-      // 가격: td.td-full 내의 p.my-text-md.align-rt에서 추출 ("420,000원")
-      let price = 0;
-      const priceP = doc.querySelector("td.td-full p.my-text-md.align-rt");
-      if (priceP) {
-        let priceText = priceP.textContent.trim();
-        console.log("원래 priceText:", priceText);
-        // 콤마, 공백, '원' 제거 → "420000"
-        priceText = priceText.replace(/[,원\s]/g, "");
-        console.log("정제된 priceText:", priceText);
-        price = parseInt(priceText, 10) || 0;
-      }
-      console.log("price:", price);
+      // 총 가격 추출
+    let totalPrice = 0;
+    const priceEl = doc.querySelector("td.td-full p.my-text-flex.my-text-amount.align-rt");
+    if (priceEl) {
+      console.log("가격 요소 찾음:", priceEl);
+      let priceText = priceEl.textContent.trim(); // 원본 가격 텍스트 (예: "180,000원")
+      console.log("원본 가격 텍스트:", priceText);
+      priceText = priceText.replace(/[,원\s]/g, "");
+      console.log("가공 후 가격 텍스트:", priceText);
+      totalPrice = parseInt(priceText, 10) || 0;
+      console.log("파싱된 총 가격:", totalPrice);
+    } else {
+      console.log("가격 요소를 찾지 못함");
+    }
 
-      // 수량: td.td-full 내의 p.my-text-xs.align-lt의 세 번째 span에서 추출 ("2매")
-      let quantity = 1;
-      const qtySpans = doc.querySelectorAll("td.td-full p.my-text-xs.align-lt span");
-      if (qtySpans.length >= 3) {
-        let qtyText = qtySpans[2].textContent.trim();
-        console.log("원래 qtyText:", qtyText);
-        qtyText = qtyText.replace(/[^\d]/g, ""); // 숫자만 남김 → "2"
-        console.log("정제된 qtyText:", qtyText);
-        quantity = parseInt(qtyText, 10) || 1;
+    // 수량 추출
+    let quantity = 0;
+    const qtyEl = doc.querySelector("td.td-full p.my-text-data.align-lt");
+    if (qtyEl) {
+      console.log("수량 요소 찾음:", qtyEl);
+      const spans = qtyEl.querySelectorAll("span");
+      if (spans.length >= 3) {
+        let qtyText = spans[2].textContent.trim(); // 원본 수량 텍스트 (예: "3매")
+        console.log("원본 수량 텍스트:", qtyText);
+        qtyText = qtyText.replace(/[^\d]/g, "");
+        console.log("가공 후 수량 텍스트:", qtyText);
+        quantity = parseInt(qtyText, 10) || 0;
+        console.log("파싱된 수량:", quantity);
+      } else {
+        console.log("수량 요소 내 span 개수가 부족함. Found:", spans.length);
       }
-      console.log("quantity:", quantity);
+    } else {
+      console.log("수량 요소를 찾지 못함");
+    }
       console.log("---- extractSaleInfoData 종료 ----");
 
       return {
@@ -554,7 +564,7 @@ document.addEventListener("DOMContentLoaded", function() {
         product_category,
         product_datetime,
         product_description,
-        price,
+        price : totalPrice,
         quantity
       };
     }
@@ -1215,6 +1225,7 @@ function openSaleInfoEditForm(saleInfoRecord) {
         // 기존 renderTickets 대신 applyFilters 호출하여 필터가 적용된 결과로 렌더링
         applyFilters();
       } catch (error) {
+
         console.error("Error fetching tickets:", error);
         const tableBody = document.getElementById("ticketTableBody");
         tableBody.innerHTML = "<tr><td colspan='16'>티켓 목록을 불러오는 중 오류가 발생했습니다.</td></tr>";

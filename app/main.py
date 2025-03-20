@@ -650,6 +650,8 @@ def delete_sale_done(order_num: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+from sqlalchemy import select, func
+
 @app.delete("/api/sale_info/{prodnum}")
 def delete_sale_info(prodnum: str):
     try:
@@ -664,25 +666,33 @@ def delete_sale_info(prodnum: str):
             sale_quantity = sale_info_data.quantity
             reservation_number = sale_info_data.reservation_number
 
-            # 2. 해당 prodnum에 연결된 판매 완료 정보(sale_done) 삭제
+            # 2. 해당 prodnum에 연결된 판매 완료 정보(sale_done) 건수 조회
+            sale_done_count = connection.execute(
+                select(func.count()).select_from(ticket_sale_done)
+                .where(ticket_sale_done.c.prodnum == prodnum)
+            ).scalar()
+
+            # 3. 해당 prodnum에 연결된 판매 완료 정보(sale_done) 삭제
             connection.execute(
                 ticket_sale_done.delete().where(ticket_sale_done.c.prodnum == prodnum)
             )
 
-            # 3. 티켓 테이블 업데이트: 해당 예약번호의 remaining_quantity를 sale_info의 수량만큼 증가
-            connection.execute(
-                tickets_table.update().where(tickets_table.c.reservation_number == reservation_number)
-                .values(remaining_quantity = tickets_table.c.remaining_quantity + sale_quantity)
-            )
+            # 4. 판매 완료 정보가 있었다면, 티켓 테이블 업데이트: 해당 예약번호의 remaining_quantity를 sale_info의 수량만큼 증가
+            if sale_done_count > 0:
+                connection.execute(
+                    tickets_table.update().where(tickets_table.c.reservation_number == reservation_number)
+                    .values(remaining_quantity = tickets_table.c.remaining_quantity + sale_quantity)
+                )
 
-            # 4. 판매 등록 정보 삭제
+            # 5. 판매 등록 정보 삭제
             delete_query = ticket_sale_info.delete().where(ticket_sale_info.c.prodnum == prodnum)
             result = connection.execute(delete_query)
             if result.rowcount == 0:
                 raise HTTPException(status_code=404, detail="판매 등록 정보를 찾을 수 없습니다.")
-        return {"message": "판매 등록 정보와 관련된 판매 완료 정보가 삭제되었으며, 남은 티켓 수가 복구되었습니다!"}
+        return {"message": "판매 등록 정보와 연결된 판매 완료 정보가 삭제되었으며, 관련 티켓의 남은 수가 복구되었습니다!"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 
