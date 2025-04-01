@@ -39,3 +39,25 @@ ticket_sale_done = Table(
     Column("remark", String, nullable=True),
     extend_existing=True
 )
+
+ticket_canceled = Table(
+    "ticket_canceled", metadata,
+    Column("reservation_number", String(50), nullable=False),
+    Column("purchase_source", String(50)),
+    Column("buyer", String(50)),
+    Column("purchase_date", DateTime),
+    Column("payment_amount", Integer),
+    Column("payment_method", String(50)),
+    Column("card_company", String(50)),
+    Column("card_number", String(50)),
+    Column("card_approval_number", String(50)),
+    Column("product_use_date", DateTime),
+    Column("product_name", String(255)),
+    Column("purchase_quantity", Integer),
+    Column("remaining_quantity", Integer),
+    Column("seat_detail", String(255)),
+    Column("seat_image_name", String(255)),
+    Column("cancel_fee", Integer),
+    extend_existing=True
+)
+metadata.create_all(bind=engine)

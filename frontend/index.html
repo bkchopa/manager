@@ -12,6 +12,15 @@
     <input type="text" id="prodnumInput" placeholder="제품번호를 입력하세요" />
     <button id="prodnumSearchBtn">티켓 검색</button>
   </div>
+  <!-- 날짜 범위 검색 영역: 제품 사용일 기준 -->
+  <div id="dateRangeSearch">
+    <label>시작일:
+      <input type="date" id="startDate">
+    </label>
+    <label>종료일:
+      <input type="date" id="endDate">
+    </label>
+  </div>
   <!-- 검색 결과를 표시할 영역 (예: 모달 또는 별도의 영역) -->
   <div id="ticketDetails"></div>
   <div class="button-container">
@@ -72,9 +81,14 @@
 
       <!-- HTML 요소 패치 영역 -->
       <label>HTML 요소 붙여넣기:</label>
-      <textarea id="rawElementInputTicket" rows="4" style="width:100%;" placeholder="여기에 티켓 HTML 요소를 붙여넣으세요"></textarea>
+      <textarea id="rawElementInputTicket" rows="5" style="width:100%;" placeholder="여기에 티켓 HTML 요소를 붙여넣으세요"></textarea>
       <button id="patchElementBtnTicket">제휴티링 버튼</button>
       <button id="patchElementBtnTiring">티링</button>
+      <button id="patchElementBtnInterpark">인터파크 데이터 패치</button>
+      <button id="patchElementBtnLotte">롯데 데이터 패치</button>
+      <button id="patchElementBtnDoosan">두산 데이터 패치</button>
+      <button id="patchElementBtnYesa">예사 데이터 패치</button>
+      <button id="patchElementBtnBaegoo">배구 데이터 패치</button>
       <hr>
 
       <form id="addTicketForm">
@@ -191,6 +205,7 @@
       <hr>
       <form id="saleInfoForm">
         <label>예매번호(티켓): <input type="text" name="reservation_number" readonly /></label><br>
+        <label>제품번호: <input type="text" name="prodnum" required /></label><br>
         <label>티켓 등급: <input type="text" name="ticket_grade" required /></label><br>
         <label>티켓 위치: <input type="text" name="ticket_floor" required /></label><br>
         <label>티켓 구역: <input type="text" name="ticket_area" required /></label><br>
@@ -199,7 +214,6 @@
         <label>상품 설명: <input type="text" name="product_description" required /></label><br>
         <label>가격: <input type="number" name="price" required /></label><br>
         <label>수량: <input type="number" name="quantity" required /></label><br>
-        <input type="hidden" name="prodnum" />
         <button type="submit">저장</button>
       </form>
     </div>

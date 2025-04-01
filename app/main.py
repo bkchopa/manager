@@ -7,7 +7,7 @@ from app.database import engine
 from contextlib import asynccontextmanager
 import uvicorn
 import os
-from app.models import ticket_sale_info  # models.py에 정의되어 있어야 함
+from app.models import ticket_sale_info, ticket_canceled  # models.py에 정의되어 있어야 함
 from app.models import ticket_sale_done
 import shutil
 from app.config import SEAT_IMAGE_FOLDER
@@ -694,6 +694,50 @@ def delete_sale_info(prodnum: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/cancel_ticket/{reservation_number}")
+def cancel_ticket(reservation_number: str):
+    try:
+        with engine.begin() as connection:
+            # ticket 테이블에서 해당 티켓 조회
+            query = tickets_table.select().where(tickets_table.c.reservation_number == reservation_number)
+            result = connection.execute(query)
+            ticket = result.fetchone()
+            if not ticket:
+                raise HTTPException(status_code=404, detail="티켓을 찾을 수 없습니다.")
+
+            # 예매취소 수수료 계산:
+            # cancel_fee = (payment_amount - (purchase_quantity * 1000)) // 10 + (purchase_quantity * 1000)
+            cancel_fee = (ticket.payment_amount - (ticket.purchase_quantity * 1000)) // 10 + (
+                        ticket.purchase_quantity * 1000)
+
+            # ticket_canceled 테이블에 데이터 삽입
+            ins_stmt = ticket_canceled.insert().values(
+                reservation_number=ticket.reservation_number,
+                purchase_source=ticket.purchase_source,
+                buyer=ticket.buyer,
+                purchase_date=ticket.purchase_date,
+                payment_amount=ticket.payment_amount,
+                payment_method=ticket.payment_method,
+                card_company=ticket.card_company,
+                card_number=ticket.card_number,
+                card_approval_number=ticket.card_approval_number,
+                product_use_date=ticket.product_use_date,
+                product_name=ticket.product_name,
+                purchase_quantity=ticket.purchase_quantity,
+                remaining_quantity=ticket.remaining_quantity,
+                seat_detail=ticket.seat_detail,
+                seat_image_name=ticket.seat_image_name,
+                cancel_fee=cancel_fee
+            )
+            connection.execute(ins_stmt)
+
+            # ticket 테이블에서 해당 티켓 삭제
+            del_stmt = tickets_table.delete().where(tickets_table.c.reservation_number == reservation_number)
+            connection.execute(del_stmt)
+
+        return {"message": "티켓 예매취소가 완료되었습니다."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":
